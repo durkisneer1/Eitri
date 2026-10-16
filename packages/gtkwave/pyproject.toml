@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=77,<81", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eitri-gtkwave"
+version = "0.1.0"
+description = "Python gtkwave adapter for Eitri"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+dependencies = [
+
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["gtkwave"]
+
+[tool.setuptools.package-data]
+gtkwave = ["py.typed", "_vendor/**/*"]

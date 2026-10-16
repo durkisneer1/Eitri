@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=77,<81", "wheel>=0.45,<0.47"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ghdl-bundled"
+version = "6.0.0.post1"
+description = "Unofficial self-contained GHDL binaries and Python bindings"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+dependencies = ["pyTooling[terminal]~=8.12", "pyVHDLModel~=0.33"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+]
+
+[project.scripts]
+ghdl = "ghdl.__main__:main"
+ghdl-ls = "pyGHDL.cli.lsp:main"
+ghdl-dom = "pyGHDL.cli.dom:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+ghdl = ["_native/**/*", "_sources/**/*"]
+pyGHDL = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

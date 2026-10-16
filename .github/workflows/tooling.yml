@@ -1,0 +1,39 @@
+name: Python adapters
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      YOWASP_CACHE_DIR: ${{ github.workspace }}/work/yowasp-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install build pytest nodejs-wheel-binaries==24.19.0 dearpygui==2.3.1
+      - run: python scripts/prepare_netlistsvg.py
+      - name: Build distributable adapter wheels
+        run: |
+          python -m build --wheel --outdir dist packages/yosys
+          python -m build --wheel --outdir dist packages/gtkwave
+          python -m build --wheel --outdir dist packages/netlistsvg
+          python -m build --wheel --outdir dist .
+      - name: Install built adapters (GHDL tested in native workflow)
+        run: python -c "import glob,subprocess,sys; w=[p for p in glob.glob('dist/*.whl') if 'eitri-0.1.0-' not in p]; subprocess.check_call([sys.executable,'-m','pip','install',*w])"
+      - run: python -m pytest -q
+      - run: python -m pip check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: adapters-${{ matrix.os }}
+          path: dist/*.whl
+          if-no-files-found: error

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=77,<81", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eitri-yosys"
+version = "0.1.0"
+description = "Python yosys adapter for Eitri"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+dependencies = [
+  "yowasp-yosys==0.70.0.0.post1259",
+  "pyosys==0.70; sys_platform != 'win32'"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["yosys"]
+
+[tool.setuptools.package-data]
+yosys = ["py.typed", "_vendor/**/*"]

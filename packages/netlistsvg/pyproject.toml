@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=77,<81", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eitri-netlistsvg"
+version = "0.1.0"
+description = "Python netlistsvg adapter for Eitri"
+requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+dependencies = [
+  "nodejs-wheel-binaries==24.19.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["netlistsvg"]
+
+[tool.setuptools.package-data]
+netlistsvg = ["py.typed", "_vendor/**/*"]

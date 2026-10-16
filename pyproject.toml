@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=77,<81", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eitri"
+version = "0.1.0"
+description = "Development workspace for a Python HDL desktop application"
+requires-python = ">=3.10"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+dependencies = [
+  "dearpygui==2.3.1",
+  "ghdl-bundled==6.0.0.post1",
+  "eitri-yosys==0.1.0",
+  "eitri-netlistsvg==0.1.0",
+  "eitri-gtkwave==0.1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "build>=1,<2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: runs installed tool backends"]

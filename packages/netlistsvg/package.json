@@ -1,0 +1,6 @@
+{
+  "name": "eitri-netlistsvg-payload",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {"netlistsvg": "1.0.2"}
+}
