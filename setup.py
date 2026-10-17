@@ -23,9 +23,13 @@ def native_wheel():
     if name != "ghdl-bundled" or str(version) != "6.0.0.post1":
         raise RuntimeError("Expected ghdl-bundled 6.0.0.post1")
     platforms = {tag.platform for tag in tags}
-    if len(platforms) != 1 or "any" in platforms:
-        raise RuntimeError("Expected one native platform tag")
-    return path, platforms.pop()
+    if "any" in platforms or any(
+        tag.interpreter != "py3" or tag.abi != "none" for tag in tags
+    ):
+        raise RuntimeError("Expected a py3-none native wheel")
+    # auditwheel may advertise multiple compatible manylinux policies. Keep
+    # the complete compressed platform field, including its original order.
+    return path, path.stem.rsplit("-", 1)[1]
 
 
 class BinaryDistribution(Distribution):

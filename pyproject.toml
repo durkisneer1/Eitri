@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "build>=1,<2"]
+dev = ["pytest>=8,<10", "build>=1,<2", "setuptools>=77,<81"]
 
 [project.scripts]
 ghdl = "ghdl.__main__:main"

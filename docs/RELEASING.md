@@ -22,7 +22,10 @@ its separate distribution metadata. Do not relabel a macOS 26 wheel as macOS 15.
 Do not upload a source distribution: this release requires prebuilt native code.
 
 The GHDL workflow uploads final `eitri-hdl-*` artifacts after clean installation
-and tests on each platform. Download those wheel artifacts into `release/` for
+and tests on each platform. The clean-install matrix covers Python 3.11, 3.12,
+3.13, and 3.14 on Windows x64, Linux x64, and macOS ARM64. Wait for all twelve
+jobs to pass; artifact uploads occur in the Python 3.14 jobs and do not by
+themselves prove the other versions passed. Download those wheel artifacts into `release/` for
 a multiplatform release. The locally built macOS wheel supports only macOS 26+
 ARM64. Only include intended, tested artifacts of the current version.
 

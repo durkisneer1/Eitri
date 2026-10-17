@@ -152,7 +152,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.11', '3.14']
+        python: ['3.11', '3.12', '3.13', '3.14']
         target: [windows-x64, macos-arm64, linux-x64]
         include:
           - target: windows-x64
@@ -188,7 +188,7 @@ jobs:
         run: |
           python -m pip install nodejs-wheel-binaries==24.19.0
           python scripts/prepare_netlistsvg.py
-          python -m pip install build twine pytest
+          python -m pip install build twine pytest "setuptools>=77,<81"
           python scripts/build_release.py --ghdl-wheel-dir packages/ghdl/wheels --outdir release
           python -m twine check release/*.whl
           python -m pip uninstall -y ghdl-bundled
