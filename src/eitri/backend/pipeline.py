@@ -124,6 +124,10 @@ def run_pipeline(request, directory, log=print):
 
 def main():
     import sys
+    # JobRunner reads run.log as UTF-8. Redirected Windows streams otherwise
+    # use the system code page, which cannot encode our Unicode progress text.
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
     directory = Path(sys.argv[1]).resolve()
     request = json.loads((directory / 'request.json').read_text(encoding='utf-8'))
     try:
