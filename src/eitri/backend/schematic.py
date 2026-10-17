@@ -2,7 +2,7 @@
 from copy import deepcopy
 
 
-def display_netlist(netlist):
+def display_netlist(netlist, top=None):
     """Represent X/Z as labeled source boxes in a renderer-only copy.
 
     netlistsvg 1.0.2 rejects Z and does not render X as a proper constant node.
@@ -10,7 +10,22 @@ def display_netlist(netlist):
     The original netlist.json remains the authoritative synthesis artifact.
     """
     display = deepcopy(netlist)
+    if top is not None:
+        # Child implementations stay in the exported netlist. The renderer sees
+        # only the top module, so child instances become labeled port boxes.
+        display['modules'] = {top: display['modules'][top]}
+        for name, cell in display['modules'][top].get('cells', {}).items():
+            if cell.get('type') in netlist['modules']:
+                # Generic boxes otherwise show only their type, hiding which
+                # instance they represent. Change only the renderer's label.
+                import re
+                original_type = cell['type']
+                cell.setdefault('attributes', {})['component_type'] = re.sub(r'_B[^_]+$', '', original_type)
+                cell['type'] = name
     for module in display['modules'].values():
+        # Scope markers retain source attributes after flattening, not hardware.
+        module['cells'] = {name: cell for name, cell in module.get('cells', {}).items()
+                           if cell.get('type') != '$scopeinfo'}
         vectors = [port['bits'] for port in module.get('ports', {}).values()]
         vectors += [net['bits'] for net in module.get('netnames', {}).values()]
         vectors += [bits for cell in module.get('cells', {}).values() for bits in cell.get('connections', {}).values()]

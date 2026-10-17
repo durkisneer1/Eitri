@@ -174,3 +174,55 @@ end;
     assert page.status.text() == 'Stopped.'
     assert not (page.result_dir / 'result.json').exists()
     assert page.run_button.isEnabled()
+
+
+def test_scope_metadata_is_not_drawn():
+    original = {'modules': {'top': {'ports': {}, 'netnames': {}, 'cells': {
+        'scope': {'type': '$scopeinfo', 'connections': {}},
+        'fa0': {'type': 'adder', 'connections': {}}
+    }}, 'adder': {'ports': {}, 'netnames': {}, 'cells': {}}}}
+    drawing = display_netlist(original, top='top')
+    assert list(drawing['modules']) == ['top']
+    assert list(drawing['modules']['top']['cells']) == ['fa0']
+    assert drawing['modules']['top']['cells']['fa0']['type'] == 'fa0'
+    assert drawing['modules']['top']['cells']['fa0']['attributes']['component_type'] == 'adder'
+    assert original['modules']['top']['cells']['scope']['type'] == '$scopeinfo'
+
+
+@pytest.mark.integration
+def test_simple_and_detailed_hierarchy(tmp_path):
+    from eitri.backend.pipeline import run_pipeline
+    pytest.importorskip('ghdl')
+    # VHDL source keeps four real instances, with a carry chain between them.
+    source = """library ieee; use ieee.std_logic_1164.all;
+entity bitadder is port(a,b,ci: in std_logic; s,co: out std_logic); end;
+architecture rtl of bitadder is begin s<=a xor b xor ci;
+co<=(a and b) or (ci and (a xor b)); end;
+library ieee; use ieee.std_logic_1164.all;
+entity top is port(a,b: in std_logic_vector(3 downto 0);
+ci: in std_logic; s: out std_logic_vector(3 downto 0); co: out std_logic); end;
+architecture rtl of top is
+component bitadder is port(a,b,ci: in std_logic; s,co: out std_logic); end component;
+signal c: std_logic_vector(4 downto 0);
+begin c(0)<=ci; co<=c(4);
+fa0: bitadder port map(a(0),b(0),c(0),s(0),c(1));
+fa1: bitadder port map(a(1),b(1),c(1),s(1),c(2));
+fa2: bitadder port map(a(2),b(2),c(2),s(2),c(3));
+fa3: bitadder port map(a(3),b(3),c(3),s(3),c(4));
+end;"""
+    request = dict(kind='circuit', standard='VHDL 2008', entity='top', design=source)
+    for detail in ('Simple', 'Detailed'):
+        directory = tmp_path / detail
+        result = run_pipeline(dict(request, circuit_detail=detail), directory, log=lambda _: None)
+        svg = (directory / 'schematic.svg').read_text()
+        assert '$scopeinfo' not in svg
+        netlist = json.loads((directory / 'netlist.json').read_text())
+        cells = netlist['modules'][result['top']]['cells']
+        if detail == 'Simple':
+            assert set(cells) == {'fa0', 'fa1', 'fa2', 'fa3'}
+            assert all(cell['type'] in netlist['modules'] for cell in cells.values())
+            assert all(f'>fa{i}<' in svg for i in range(4))
+            assert result['cells'] == 4
+        else:
+            assert all(cell['type'] not in netlist['modules'] for cell in cells.values())
+            assert result['cells'] > 4

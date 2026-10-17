@@ -30,6 +30,7 @@ class ToolController(QObject):
             control.textChanged.connect(self.mark_stale)
         window.sidebar.standard.currentTextChanged.connect(self.mark_stale)
         window.sidebar.wave_format.currentTextChanged.connect(self.mark_stale)
+        window.sidebar.circuit_detail.currentTextChanged.connect(self.mark_stale)
 
     def snapshot(self, kind):
         sidebar = self.window.sidebar
@@ -37,7 +38,8 @@ class ToolController(QObject):
         if kind == 'simulation':
             roots.append((self.window.paths[1], self.window.code_page.editors[1].toPlainText()))
         dependencies = snapshot_dependencies(roots)
-        return {'dependencies': dependencies, 'kind': kind, 'standard': sidebar.standard.currentText(),
+        return {'dependencies': dependencies, 'kind': kind,
+                'circuit_detail': sidebar.circuit_detail.currentText() if kind == 'circuit' else 'Detailed', 'standard': sidebar.standard.currentText(),
                 'entity': sidebar.entity.text().strip(),
                 'testbench': sidebar.testbench.text().strip() if kind == 'simulation' else '',
                 'stop_time': sidebar.stop_time.text().strip().replace(' ', '') if kind == 'simulation' else '',

@@ -10,6 +10,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMainWindow, QSplitter, QStackedWidget, QVBoxLayout, QWidget
 
 from .actions import install_actions
+from .app_icon import application_icon
 from .code_page import CodePage
 from .documents import DocumentController
 from .design_flow import DesignFlow
@@ -29,6 +30,9 @@ class Workspace(QMainWindow):
         super().__init__()
 
         configure_application_font(QApplication.instance())
+        icon = application_icon()
+        QApplication.instance().setWindowIcon(icon)
+        self.setWindowIcon(icon)
         self.paths: list[Path | None] = [None, None]
         self.setStyleSheet(workspace_style())
 

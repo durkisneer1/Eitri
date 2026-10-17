@@ -18,6 +18,8 @@ def validate(request):
     """Validate settings before starting tools, with messages suitable for the UI."""
     if request['kind'] not in ('simulation', 'circuit'):
         raise ValueError('Unknown job type.')
+    if request.get('circuit_detail', 'Detailed') not in ('Simple', 'Detailed'):
+        raise ValueError('Choose Simple or Detailed circuit generation.')
     if request['standard'] not in STANDARDS:
         raise ValueError('Choose a supported VHDL standard.')
     name = request['testbench'] if request['kind'] == 'simulation' else request['entity']
@@ -41,6 +43,7 @@ def run_pipeline(request, directory, log=print):
     import netlistsvg
     from .vcd import parse_vcd
     from .schematic import display_netlist, inline_svg_styles
+    from .schematic_theme import write_skin, color_schematic
 
     validate(request)
     directory = Path(directory).resolve()
@@ -97,20 +100,26 @@ def run_pipeline(request, directory, log=print):
     (directory / 'design.v').write_text(lowered.stdout, encoding='utf-8')
     # -auto-top avoids case differences between VHDL names and emitted Verilog.
     # memory_map makes ROM logic explicit for netlistsvg's generic cell renderer.
+    detail = request.get('circuit_detail', 'Detailed')
+    passes = ('proc; memory_map; clean; ' if detail == 'Simple'
+              else 'proc; flatten -noscopeinfo; opt; memory_map; opt; clean; ')
     script = ('read_verilog design.v; hierarchy -check -auto-top; '
-              'proc; flatten; opt; memory_map; opt; clean; stat; write_json netlist.json')
+              + passes + 'stat; write_json netlist.json')
     invoke('Build Yosys netlist', yosys.run_script, script, cwd=directory, timeout=180)
     log('\n=== Render schematic ===')
     netlist = json.loads((directory / 'netlist.json').read_text())
-    (directory / 'schematic.json').write_text(json.dumps(display_netlist(netlist)), encoding='utf-8')
-    netlistsvg.render(directory / 'schematic.json', directory / 'schematic.svg', timeout=90)
-    inline_svg_styles(directory / 'schematic.svg')
     modules = netlist['modules']
     top = next((name for name, module in modules.items()
                 if str(module.get('attributes', {}).get('top', '')).endswith('1')), next(iter(modules)))
+    display = display_netlist(netlist, top=top)
+    (directory / 'schematic.json').write_text(json.dumps(display), encoding='utf-8')
+    write_skin(directory / 'skin.svg', display)
+    netlistsvg.render(directory / 'schematic.json', directory / 'schematic.svg', skin=directory / 'skin.svg', timeout=90)
+    inline_svg_styles(directory / 'schematic.svg')
+    color_schematic(directory / 'schematic.svg')
     module = modules[top]
     return {'kind': 'circuit', 'svg': 'schematic.svg', 'top': top,
-            'cells': len(module.get('cells', {})), 'ports': len(module.get('ports', {}))}
+            'detail': detail, 'cells': len(display['modules'][top].get('cells', {})), 'ports': len(module.get('ports', {}))}
 
 
 def main():

@@ -6,14 +6,15 @@ from PySide6.QtSvgWidgets import QGraphicsSvgItem
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QHBoxLayout, QPushButton
 from .job_page import JobPage
 from .fonts import monospace_family
+from eitri.backend.schematic_theme import CANVAS
 
 
 class SchematicView(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setScene(QGraphicsScene(self))
-        # netlistsvg uses dark wires on a white canvas; preserve their contrast.
-        self.setBackgroundBrush(QColor('#f7f5ef'))
+        # Match the SVG canvas so zooming and panning have no visible seam.
+        self.setBackgroundBrush(QColor(CANVAS))
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
@@ -79,7 +80,7 @@ class CircuitPage(JobPage):
         self.svg_file = path
         self.save_svg.setEnabled(True)
         self.has_result = True
-        self.status.setText(f'{result["top"]} · {result["cells"]} cells · {result["ports"]} ports. Drag to pan; scroll to zoom.')
+        self.status.setText(f'{result["top"]} · {result.get("detail", "Detailed")} · {result["cells"]} cells · {result["ports"]} ports. Drag to pan; scroll to zoom.')
 
     def export_svg(self):
         if self.svg_file:

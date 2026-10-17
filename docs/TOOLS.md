@@ -29,9 +29,13 @@ does not prevent simulation or embedded waveform viewing.
 ## Circuit
 
 Set the top-level entity, then click **Generate circuit** or press **F6**. The
-pipeline synthesizes the Design tab with GHDL, lowers it to Verilog, processes it
+pipeline synthesizes the Design tab and dependencies with GHDL, lowers them to Verilog, processes them
 with Yosys, maps memories into logic, and renders the netlist with netlistsvg.
+
+Choose **Simple** to preserve direct component instances as labeled boxes with ports and connections, or **Detailed** (the default) to flatten components into their internal logic. Click **Generate circuit** after changing the option. Simple is a top-level hierarchy view: a 4-bit adder built from four 1-bit adders shows four boxes; a design with no child instances still shows its own logic. Boxes do not expand interactively. Yosys scope metadata is excluded from drawings and displayed cell counts.
 The Testbench tab is excluded from synthesis.
+
+Schematics use the app palette: slate gates/component boxes, brass wires and sage ports on a charcoal canvas. Component instances have short headers and a separate type label; pin labels sit inside wider boxes. The router leaves additional space between nodes and wires. These styles also apply to exported SVGs.
 
 Drag the schematic to pan, scroll or use +/− to zoom, and click Fit for an overview.
 The summary shows the top module, cell count and port count. Export SVG saves the

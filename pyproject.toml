@@ -27,3 +27,6 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["integration: runs installed tool backends"]
+
+[tool.setuptools.package-data]
+eitri = ["assets/*.svg"]

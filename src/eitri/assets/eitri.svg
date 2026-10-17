@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Eitri — Ehwaz icon concept</title>
+  <desc id="desc">A brass Ehwaz rune with a shallow central notch and angled feet on a charcoal rounded square.</desc>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="#242423"/>
+  <!-- Filled outlines keep the angled foot cuts crisp at every size. -->
+  <g fill="#C9B58C">
+    <path d="M138 126 H174 V350 L138 386 Z"/>
+    <path d="M338 126 H374 V386 L338 350 Z"/>
+    <path d="M156 126 L256 194 L356 126 L356 170 L256 238 L156 170 Z"/>
+  </g>
+</svg>
