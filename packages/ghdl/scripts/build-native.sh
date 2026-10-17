@@ -8,6 +8,11 @@ JOBS=${JOBS:-4}
 BACKEND=${BACKEND:-mcode}
 mkdir -p "$ROOT/work/native-build"
 cd "$ROOT/work/native-build"
+# GNAT's -aI options do not reliably receive MSYS2's Unix-to-Windows path
+# conversion. Relative source paths work for both native GNAT and MSYS make.
+case "$(uname -s)" in
+  MINGW*|MSYS*) SOURCE=../ghdl ;;
+esac
 args=("--prefix=$PREFIX" --enable-libghdl --enable-synth --enable-gplcompat)
 if [[ "$BACKEND" == llvm-jit ]]; then
   LLVM_CONFIG=${LLVM_CONFIG:-llvm-config}

@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 from unittest.mock import patch
 import pytest
 import ghdl
@@ -11,7 +12,7 @@ def test_arguments_are_not_shell_interpreted(tmp_path):
         args, kwargs = run.call_args
         assert args[0] == [str(binary), "-a", "file with spaces;literal.vhd"]
         assert kwargs.get("shell", False) is False
-        assert kwargs["env"]["GHDL_PREFIX"].endswith("lib/ghdl")
+        assert Path(kwargs["env"]["GHDL_PREFIX"]).parts[-2:] == ("lib", "ghdl")
 
 
 def test_reject_shell_string():
