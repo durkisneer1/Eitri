@@ -31,9 +31,8 @@ jobs:
           python -m build --wheel --outdir dist packages/yosys
           python -m build --wheel --outdir dist packages/gtkwave
           python -m build --wheel --outdir dist packages/netlistsvg
-          python -m build --wheel --outdir dist .
       - name: Install built adapters (GHDL tested in native workflow)
-        run: python -c "import glob,subprocess,sys; w=[p for p in glob.glob('dist/*.whl') if 'eitri-0.1.0-' not in p]; subprocess.check_call([sys.executable,'-m','pip','install',*w])"
+        run: python -c "import glob,subprocess,sys; w=glob.glob('dist/*.whl'); subprocess.check_call([sys.executable,'-m','pip','install',*w])"
       - run: python -m pytest -q
         env:
           PYTHONPATH: src

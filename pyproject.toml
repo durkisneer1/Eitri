@@ -1,31 +1,38 @@
 [build-system]
-requires = ["setuptools>=77,<81", "wheel"]
+requires = ["setuptools>=77,<81", "wheel", "packaging>=24.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "eitri"
+name = "eitri-hdl"
 version = "0.1.0"
-description = "Development workspace for a Python HDL desktop application"
+description = "A VHDL workspace for editing, simulation, and circuit visualization"
 requires-python = ">=3.11"
 readme = "README.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 dependencies = [
   "PySide6-Essentials==6.12.0",
-  "ghdl-bundled==6.0.0.post1",
-  "eitri-yosys==0.1.0",
-  "eitri-netlistsvg==0.1.0",
-  "eitri-gtkwave==0.1.0",
+  "pyTooling[terminal]~=8.12",
+  "pyVHDLModel~=0.33",
+  "yowasp-yosys==0.70.0.0.post1259",
+  "pyosys==0.70; sys_platform != 'win32'",
+  "nodejs-wheel-binaries==24.19.0",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "build>=1,<2"]
 
+[project.scripts]
+ghdl = "ghdl.__main__:main"
+ghdl-ls = "pyGHDL.cli.lsp:main"
+ghdl-dom = "pyGHDL.cli.dom:main"
+
 [project.gui-scripts]
 eitri = "eitri.ui.window:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[project.urls]
+Homepage = "https://github.com/durkisneer1/Eitri"
+Issues = "https://github.com/durkisneer1/Eitri/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -33,3 +40,7 @@ markers = ["integration: runs installed tool backends"]
 
 [tool.setuptools.package-data]
 eitri = ["assets/*.svg"]
+
+yosys = ["py.typed"]
+gtkwave = ["py.typed"]
+netlistsvg = ["py.typed", "_vendor/**/*"]

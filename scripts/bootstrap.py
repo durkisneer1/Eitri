@@ -20,13 +20,13 @@ if not python.exists():
 
 def run(*parts):
     subprocess.run([str(python), *map(str, parts)], cwd=root, check=True,
-                   env={**os.environ, "YOWASP_CACHE_DIR": str(root / "work/yowasp-cache")})
+                   env={**os.environ, "YOWASP_CACHE_DIR": str(root / "work/yowasp-cache"),
+                        "EITRI_GHDL_WHEEL": str(wheels[0])})
 
 # Fail on an incompatible wheel before doing the JavaScript preparation.
 run("-m", "pip", "install", wheels[0], "nodejs-wheel-binaries==24.19.0")
 run(root / "scripts/prepare_netlistsvg.py")
-run("-m", "pip", "install", "-e", "packages/yosys", "-e", "packages/gtkwave",
-    "-e", "packages/netlistsvg", "-e", ".[dev]")
+run("-m", "pip", "install", "-e", ".[dev]")
 run("-m", "pip", "check")
 run(root / "scripts/check_environment.py")
 print(f"Ready: {python}")

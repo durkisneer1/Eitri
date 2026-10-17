@@ -12,30 +12,30 @@ These screenshots show my 4-bit full adder, built from four 1-bit adders.
 
 **Write designs and testbenches**
 
-![VHDL editor showing my four-bit full adder](docs/screenshots/code.png)
+![VHDL editor showing my four-bit full adder](https://github.com/durkisneer1/Eitri/raw/refs/heads/main/docs/screenshots/code.png)
 
 **Simulate and inspect waveforms**
 
-![GHDL simulation showing adder inputs, sum and carry](docs/screenshots/simulation.png)
+![GHDL simulation showing adder inputs, sum and carry](https://github.com/durkisneer1/Eitri/raw/refs/heads/main/docs/screenshots/simulation.png)
 
 **View component connections or expand them into logic gates**
 
-![Simple circuit view showing four connected full-adder components](docs/screenshots/circuit-simple.png)
+![Simple circuit view showing four connected full-adder components](https://github.com/durkisneer1/Eitri/raw/refs/heads/main/docs/screenshots/circuit-simple.png)
 
-![Detailed circuit view showing the full adder's logic gates](docs/screenshots/circuit-detailed.png)
+![Detailed circuit view showing the full adder's logic gates](https://github.com/durkisneer1/Eitri/raw/refs/heads/main/docs/screenshots/circuit-detailed.png)
 
 ## Running Eitri
 
-I'm still working on distribution; the project isn't published on PyPI yet. For now, see the [development setup](docs/DEVELOPMENT.md). Once the environment is ready:
+Install the wheel matching your platform (or, once published, `pip install eitri-hdl`). Start the application with `eitri` or:
 
 ```sh
 python -m eitri
 ```
 
-[Editor guide](docs/EDITOR.md) · [Simulation and circuit tools](docs/TOOLS.md) · [GPL-3.0-or-later license](LICENSE)
+[Editor guide](https://github.com/durkisneer1/Eitri/blob/main/docs/EDITOR.md) · [Simulation and circuit tools](https://github.com/durkisneer1/Eitri/blob/main/docs/TOOLS.md) · [GPL-3.0-or-later license](https://github.com/durkisneer1/Eitri/blob/main/LICENSE)
 
 ## Contributing to the app
 
-See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for a map of the UI modules,
+See [docs/CONTRIBUTING.md](https://github.com/durkisneer1/Eitri/blob/main/docs/CONTRIBUTING.md) for a map of the UI modules,
 signal flow, and where to add controls or change behavior. Start with
 `src/eitri/ui/window.py` for the overall composition.
