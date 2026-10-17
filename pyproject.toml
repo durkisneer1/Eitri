@@ -21,6 +21,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8,<10", "build>=1,<2"]
 
+[project.gui-scripts]
+eitri = "eitri.ui.window:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
