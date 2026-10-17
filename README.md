@@ -26,11 +26,19 @@ These screenshots show my 4-bit full adder, built from four 1-bit adders.
 
 ## Running Eitri
 
-Install the wheel matching your platform (or, once published, `pip install eitri-hdl`). Start the application with `eitri` or:
+Eitri is available on [PyPI as `eitri-hdl`](https://pypi.org/project/eitri-hdl/). Install it with Python 3.11 or newer:
 
 ```sh
-python -m eitri
+python -m pip install eitri-hdl
 ```
+
+Then open the app from your terminal:
+
+```sh
+eitri
+```
+
+If you installed into a virtual environment, activate it before running `eitri`. You can also launch the app with `python -m eitri`.
 
 [Editor guide](https://github.com/durkisneer1/Eitri/blob/main/docs/EDITOR.md) · [Simulation and circuit tools](https://github.com/durkisneer1/Eitri/blob/main/docs/TOOLS.md) · [GPL-3.0-or-later license](https://github.com/durkisneer1/Eitri/blob/main/LICENSE)
 
