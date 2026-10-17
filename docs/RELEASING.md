@@ -7,6 +7,9 @@ native viewer is optional and remains separately installed.
 
 ## Build
 
+The normal release path is GitHub Actions Trusted Publishing, described below.
+Local builds and manual uploads remain available for troubleshooting.
+
 Use the release environment with `build` and `twine` installed. Prepare the
 JavaScript payload using an environment with the pinned nodejs-wheel-binaries:
 
@@ -34,7 +37,64 @@ The source/notice requirements in `packages/ghdl/THIRD_PARTY_NOTICES.md` still
 apply to the combined package, including corresponding runtime sources. A local
 build and passing tests alone do not establish completion of that release review.
 
-## Upload to TestPyPI (manual)
+## Trusted Publishing setup (once)
+
+Create the `testpypi` and `pypi` environments in the repository's
+[Settings → Environments](https://github.com/durkisneer1/Eitri/settings/environments).
+To pause before production upload, add yourself as a required reviewer for
+`pypi`, allowing self-review if you trigger your own releases. Without that
+environment protection, production upload proceeds automatically after TestPyPI.
+Restrict the production environment to version tags (`v*`). Allow `main` and
+version tags for `testpypi` if using the manual test-only option.
+
+Register GitHub trusted publishers with these exact values:
+
+| Setting | TestPyPI | PyPI |
+| --- | --- | --- |
+| Project | `eitri-hdl` | `eitri-hdl` |
+| Owner | `durkisneer1` | `durkisneer1` |
+| Repository | `Eitri` | `Eitri` |
+| Workflow filename | `ghdl-wheels.yml` | `ghdl-wheels.yml` |
+| Environment | `testpypi` | `pypi` |
+
+For the existing TestPyPI project, use
+[project Publishing settings](https://test.pypi.org/manage/project/eitri-hdl/settings/publishing/).
+If the production project does not exist, add a pending publisher under
+[PyPI account Publishing](https://pypi.org/manage/account/publishing/).
+If it already exists under your account, use its project Publishing settings.
+No API tokens or GitHub secrets are required. See the official
+[existing-project](https://docs.pypi.org/trusted-publishers/adding-a-publisher/) and
+[new-project](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/) guides.
+
+## Automated release
+
+Commit and push the workflow changes before tagging. Set the desired version
+in `pyproject.toml`, commit it, and push a matching tag, for example:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The tag must match the project version exactly. This triggers native builds and
+all twelve clean-install jobs, validates the three final Eitri wheels, uploads
+them to TestPyPI, and then uploads the identical artifacts to PyPI. If a required
+reviewer is configured for `pypi`, test the TestPyPI release before approving
+the production job. No local wheel downloads or Twine uploads are needed.
+
+For a TestPyPI-only rehearsal, use Actions → GHDL native wheels → Run workflow
+and enable `publish_testpypi`. Manual runs never upload to production. Use a
+distinct prerelease version (for example `0.1.1rc1`) for rehearsals: rebuilding
+the same filenames for a later tag will fail because uploads are not overwritable.
+The workflow intentionally does not silently skip existing files. If an upload
+partially fails, inspect the index before deciding how to recover; do not blindly
+rerun a completed upload job.
+
+Ordinary branch pushes and pull requests only build and test. Publishing jobs
+have OIDC permission but do not check out or build source code. Both indexes
+receive the same validated artifact bundle from the current workflow run.
+
+## Upload to TestPyPI (manual fallback)
 
 ```sh
 .venv-release/bin/python -m twine upload --repository testpypi release/*.whl
@@ -54,7 +114,7 @@ The download selects Eitri exclusively from TestPyPI; installation resolves its
 public dependencies from the normal PyPI index. Verify editing, simulation and
 circuit rendering. The activated environment puts the `eitri` launcher on PATH.
 
-## Upload to production PyPI (manual, after testing)
+## Upload to production PyPI (manual fallback, after testing)
 
 ```sh
 .venv-release/bin/python -m twine upload release/*.whl
