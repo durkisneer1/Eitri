@@ -1,177 +1,212 @@
-"""Eitri desktop workspace; launch with python -m eitri."""
+"""Compose the workspace and connect its widgets to application actions.
+
+Start here for the big picture. Each imported widget owns its own layout;
+documents.py handles files, and editor.py handles text-editing behavior.
+"""
 from pathlib import Path
-import dearpygui.dearpygui as dpg
+import sys
 
-MODES = ('Code', 'Simulation', 'Circuit')
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QApplication, QMainWindow, QSplitter, QStackedWidget, QVBoxLayout, QWidget
+
+from .actions import install_actions
+from .code_page import CodePage
+from .documents import DocumentController
+from .design_flow import DesignFlow
+from .simulation import SimulationPage
+from .circuit import CircuitPage
+from .tool_controller import ToolController
+from .sidebar import Sidebar
+from .sizing import fit_window
+from .theme import workspace_style
+from .fonts import configure_application_font
+from .toolbar import Toolbar
+from .widgets import label
 
 
-class Workspace:
-    def __init__(self):
-        self.path = None
-        self.saved_text = ''
-        self.pending_open = None
+class Workspace(QMainWindow):
+    def __init__(self, run_root=None):
+        super().__init__()
 
-    def status(self, message):
-        dpg.set_value('status', message)
+        configure_application_font(QApplication.instance())
+        self.paths: list[Path | None] = [None, None]
+        self.setStyleSheet(workspace_style())
 
-    def edited(self):
-        dirty = dpg.get_value('source') != self.saved_text
-        name = self.path.name if self.path else 'Untitled.vhd'
-        dpg.set_value('document_name', name + (' *' if dirty else ''))
+        # Construct each independent page before wiring cross-page actions.
+        self.documents = DocumentController(self)
+        self.design_flow = DesignFlow(self)
+        self.toolbar = Toolbar()
+        self.sidebar = Sidebar()
+        self.code_page = CodePage()
+        self.views = QStackedWidget()
+        self.views.setMinimumWidth(350)
+        self.views.addWidget(self.code_page)
+        self.simulation_page = SimulationPage()
+        self.circuit_page = CircuitPage()
+        self.views.addWidget(self.simulation_page)
+        self.views.addWidget(self.circuit_page)
+        self.tools = ToolController(self, run_root)
 
-    def switch_mode(self, sender, app_data, user_data):
-        for mode in MODES:
-            dpg.configure_item(f'view_{mode}', show=mode == user_data)
-            dpg.configure_item(f'options_{mode}', show=mode == user_data)
-        dpg.set_value('mode_title', user_data)
+        # The left column owns navigation and settings. Pages span the full
+        # content height, so the editor and previews gain the former header space.
+        self.left_column = QWidget()
+        left_layout = QVBoxLayout(self.left_column)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
+        left_layout.addWidget(self.toolbar)
+        left_layout.addWidget(self.sidebar, 1)
 
-    def choose_open(self, sender, app_data):
-        path = Path(app_data['file_path_name'])
-        if dpg.get_value('source') != self.saved_text:
-            self.pending_open = path
-            dpg.show_item('discard_dialog')
-        else:
-            self.load(path)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.setChildrenCollapsible(False)
+        self.splitter.setHandleWidth(3)
+        self.splitter.addWidget(self.left_column)
+        self.splitter.addWidget(self.views)
+        self.splitter.setSizes([270, 870])
+        self.splitter.setStretchFactor(1, 1)
 
-    def confirm_open(self):
-        dpg.hide_item('discard_dialog')
-        if self.pending_open is not None:
-            self.load(self.pending_open)
-            self.pending_open = None
+        root = QWidget()
+        layout = QVBoxLayout(root)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.splitter, 1)
+
+        self.setCentralWidget(root)
+        self.page_name = label('')
+        self.statusBar().addWidget(self.page_name, 1)
+        self.position = label('')
+        self.statusBar().addPermanentWidget(self.position)
+
+        # Signal wiring: widgets emit intent; controllers perform the work.
+        self.toolbar.mode_changed.connect(self.switch_mode)
+        self.sidebar.open_design_requested.connect(self.design_flow.open_design)
+        self.sidebar.open_testbench_requested.connect(self.documents.open_testbench)
+        self.sidebar.save_requested.connect(self.save)
+        self.sidebar.new_requested.connect(self.new_file)
+        self.sidebar.save_as_requested.connect(self.save_as)
+        self.code_page.create_testbench_requested.connect(self.design_flow.create_testbench)
+        self.code_page.message.connect(self.statusBar().showMessage)
+        self.code_page.code_tabs.currentChanged.connect(self.active_document_changed)
+
+        for editor in self.code_page.editors:
+            editor.cursorPositionChanged.connect(self.update_position)
+            editor.document().modificationChanged.connect(self.update_title)
+
+        install_actions(self)
+        self.active_document_changed()
+        fit_window(self)
+
+    @property
+    def editor(self):
+        """The currently selected design or testbench editor."""
+        return self.code_page.editor
+
+    @property
+    def path(self):
+        return self.paths[self.code_page.code_tabs.currentIndex()]
+
+    @path.setter
+    def path(self, value):
+        self.paths[self.code_page.code_tabs.currentIndex()] = value
+
+    def active_document_changed(self, *_):
+        self.sidebar.set_document_role(self.code_page.code_tabs.currentIndex())
+        self.update_title()
+        self.update_position()
+        self.update_page_name()
+        self.editor.setFocus()
+
+    def switch_mode(self, index):
+        self.views.setCurrentIndex(index)
+        self.sidebar.options.setCurrentIndex(index)
+        self.toolbar.mode_buttons.button(index).setChecked(True)
+        self.update_page_name()
+
+    def update_page_name(self):
+        # The page label returns after temporary save/open/find messages expire.
+        code_title = ('Code - Design', 'Code - Testbench')[self.code_page.code_tabs.currentIndex()]
+        self.page_name.setText((code_title, 'Simulation and Synthesis', 'Circuit Diagram')[self.views.currentIndex()])
+        self.statusBar().clearMessage()
+
+    def update_title(self, *_):
+        names = ('Design', 'Testbench')
+        tabs = self.code_page.code_tabs
+
+        for index, (title, editor) in enumerate(zip(names, self.code_page.editors)):
+            suffix = ' •' if editor.document().isModified() else ''
+            tabs.setTabText(index, title + suffix)
+            tabs.setTabToolTip(index, str(self.paths[index]) if self.paths[index] else f'Unsaved {title.lower()} source')
+
+        role = names[tabs.currentIndex()]
+        name = self.path.name if self.path else f'Untitled {role.lower()}.vhd'
+        suffix = ' •' if self.editor.document().isModified() else ''
+
+        self.code_page.document_name.setText(name + suffix)
+        self.sidebar.file_path.setText(str(self.path) if self.path else f'{role} · not saved')
+        self.setWindowTitle(f'{name}{suffix} — Eitri')
+
+    def update_position(self):
+        cursor = self.editor.textCursor()
+        self.position.setText(f'Ln {cursor.blockNumber() + 1}, Col {cursor.positionInBlock() + 1}    |    UTF-8    |    VHDL')
+
+    # Public actions shared by toolbar buttons, menus and tests.
+    def confirm_discard(self):
+        return self.documents.confirm_discard()
+
+    def new_file(self):
+        return self.documents.new_file()
+
+    def open_file(self):
+        return self.documents.open_file()
 
     def load(self, path):
-        try:
-            content = path.read_text(encoding='utf-8')
-        except (OSError, UnicodeError) as error:
-            self.status(f'Could not open file: {error}')
-            return
-        self.path = path
-        self.saved_text = content
-        dpg.set_value('source', content)
-        dpg.set_value('file_path', str(path))
-        self.edited()
-        self.status(f'Opened {path.name}')
+        return self.documents.load(path)
 
     def save(self):
-        if self.path is None:
-            dpg.show_item('save_dialog')
-        else:
-            self.write(self.path)
+        return self.documents.save()
 
-    def choose_save(self, sender, app_data):
-        path = Path(app_data['file_path_name'])
-        if not path.suffix:
-            path = path.with_suffix('.vhd')
-        self.write(path)
+    def save_as(self):
+        return self.documents.save_as()
 
     def write(self, path):
-        content = dpg.get_value('source')
-        try:
-            path.write_text(content, encoding='utf-8')
-        except (OSError, UnicodeError) as error:
-            self.status(f'Could not save file: {error}')
+        return self.documents.write(path)
+
+    def show_find(self):
+        self.switch_mode(0)
+        self.code_page.show_find()
+
+    def closeEvent(self, event):
+        # Cancel tool trees before Qt destroys timers, then handle dirty files.
+        if not self.tools.prepare_close():
+            event.ignore()
             return
-        self.path = path
-        self.saved_text = content
-        dpg.set_value('file_path', str(path))
-        self.edited()
-        self.status(f'Saved {path.name}')
+        
+        tabs = self.code_page.code_tabs
+        original = tabs.currentIndex()
 
-    def resize(self):
-        width = dpg.get_viewport_client_width()
-        height = max(260, dpg.get_viewport_client_height() - 110)
-        dpg.configure_item('sidebar', height=height)
-        dpg.configure_item('workspace', width=max(320, width - 302), height=height)
-        dpg.configure_item('source', height=max(180, height - 100))
-
-    def build(self):
-        for tag, callback in (('open_dialog', self.choose_open), ('save_dialog', self.choose_save)):
-            with dpg.file_dialog(tag=tag, show=False, width=720, height=440,
-                                 modal=True, callback=callback):
-                dpg.add_file_extension('.vhd')
-                dpg.add_file_extension('.vhdl')
-                dpg.add_file_extension('.*')
-        with dpg.window(tag='discard_dialog', label='Unsaved changes', modal=True,
-                        show=False, no_close=True, autosize=True):
-            dpg.add_text('Discard unsaved edits and open the selected file?')
-            with dpg.group(horizontal=True):
-                dpg.add_button(label='Discard and open', callback=self.confirm_open)
-                dpg.add_button(label='Cancel', callback=lambda: dpg.hide_item('discard_dialog'))
-        with dpg.window(tag='primary', no_title_bar=True):
-            with dpg.group(horizontal=True):
-                dpg.add_text('EITRI', color=(105, 190, 240))
-                dpg.add_spacer(width=12)
-                for mode in MODES:
-                    dpg.add_button(label=mode, width=100, height=30,
-                                   callback=self.switch_mode, user_data=mode)
-                dpg.add_spacer(width=12)
-                dpg.add_button(label='Open', callback=lambda: dpg.show_item('open_dialog'))
-                dpg.add_button(label='Save', callback=self.save)
-                dpg.add_button(label='Save as', callback=lambda: dpg.show_item('save_dialog'))
-            dpg.add_separator()
-            with dpg.group(horizontal=True):
-                with dpg.child_window(tag='sidebar', width=270, height=600):
-                    dpg.add_text('OPTIONS & PARAMETERS', color=(105, 190, 240))
-                    dpg.add_separator()
-                    dpg.add_text('Source file')
-                    dpg.add_text('No file opened', tag='file_path', wrap=240)
-                    dpg.add_spacer(height=12)
-                    dpg.add_text('VHDL standard')
-                    dpg.add_combo(('2008', '1993', '2002'), default_value='2008',
-                                  tag='vhdl_standard', width=-1)
-                    dpg.add_text('Top-level entity')
-                    dpg.add_input_text(tag='top_entity', hint='e.g. counter', width=-1)
-                    dpg.add_spacer(height=16)
-                    with dpg.group(tag='options_Code'):
-                        dpg.add_text('Editing')
-                        dpg.add_text('Open a VHDL file or start typing. Save writes UTF-8 text.', wrap=240)
-                    with dpg.group(tag='options_Simulation', show=False):
-                        dpg.add_text('Testbench entity')
-                        dpg.add_input_text(tag='testbench', hint='e.g. counter_tb', width=-1)
-                        dpg.add_text('Stop time')
-                        dpg.add_input_text(tag='stop_time', default_value='1us', width=-1)
-                        dpg.add_text('Waveform format')
-                        dpg.add_combo(('VCD', 'GHW'), default_value='VCD', tag='waveform_format', width=-1)
-                        dpg.add_text('Simulation execution is not connected yet.', wrap=240)
-                    with dpg.group(tag='options_Circuit', show=False):
-                        dpg.add_text('Circuit view')
-                        dpg.add_text('Synthesize VHDL, then generate an SVG schematic.', wrap=240)
-                        dpg.add_text('Circuit generation is not connected yet.', wrap=240)
-                with dpg.child_window(tag='workspace', width=880, height=600):
-                    dpg.add_text('Code', tag='mode_title', color=(105, 190, 240))
-                    dpg.add_separator()
-                    with dpg.group(tag='view_Code'):
-                        dpg.add_text('Untitled.vhd', tag='document_name')
-                        dpg.add_input_text(tag='source', multiline=True, tab_input=True,
-                                           width=-1, height=500, callback=self.edited)
-                        dpg.add_text('Plain-text editor; syntax highlighting pending', color=(150, 160, 175))
-                    with dpg.group(tag='view_Simulation', show=False):
-                        dpg.add_text('Simulation results')
-                        dpg.add_text('Waveforms and simulator output will appear here.')
-                        dpg.add_text('Choose a testbench and stop time in the left panel.')
-                    with dpg.group(tag='view_Circuit', show=False):
-                        dpg.add_text('Circuit schematic')
-                        dpg.add_text('The generated netlist diagram will appear here.')
-                        dpg.add_text('Choose the top-level entity in the left panel.')
-            dpg.add_separator()
-            dpg.add_text('Ready', tag='status', wrap=1100)
+        for index, editor in enumerate(self.code_page.editors):
+            if editor.document().isModified():
+                tabs.setCurrentIndex(index)
+                if not self.confirm_discard():
+                    self.switch_mode(0)
+                    event.ignore()
+                    return
+                
+        tabs.setCurrentIndex(original)
+        event.accept()
 
 
 def main():
-    dpg.create_context()
-    try:
-        workspace = Workspace()
-        workspace.build()
-        dpg.create_viewport(title='Eitri', width=1200, height=800,
-                            min_width=800, min_height=500)
-        dpg.setup_dearpygui()
-        dpg.set_primary_window('primary', True)
-        dpg.set_viewport_resize_callback(workspace.resize)
-        dpg.show_viewport()
-        workspace.resize()
-        dpg.start_dearpygui()
-    finally:
-        dpg.destroy_context()
+    app = QApplication.instance() or QApplication(sys.argv)
+    app.setApplicationName('Eitri')
+    app.setOrganizationName('Eitri')
+    app.setStyle('Fusion')  # type: ignore
+    
+    window = Workspace()
+    window.show()
+
+    # Defer onboarding until Qt has sized and displayed the parent window.
+    QTimer.singleShot(0, window.design_flow.startup)
+    sys.exit(app.exec())
 
 
 if __name__ == '__main__':

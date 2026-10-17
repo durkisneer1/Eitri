@@ -11,7 +11,7 @@ readme = "README.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 dependencies = [
-  "dearpygui==2.3.1",
+  "PySide6-Essentials==6.12.0",
   "ghdl-bundled==6.0.0.post1",
   "eitri-yosys==0.1.0",
   "eitri-netlistsvg==0.1.0",

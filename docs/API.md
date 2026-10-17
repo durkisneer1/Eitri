@@ -1,7 +1,7 @@
-# Tool APIs for your future callbacks
+# Tool APIs used by the application
 
 These functions can be called from ordinary Python functions, including functions
-you later register with Dear PyGui. There are no UI dependencies in the adapters.
+connected to Qt signals. There are no UI dependencies in the adapters.
 
 ```python
 import ghdl
@@ -45,15 +45,15 @@ use a controlled working directory and quote according to Yosys syntax.
 
 For lengthy jobs, your app should submit these blocking functions to a worker and
 present the result afterward. Do not execute long synthesis jobs on the render
-thread or call Dear PyGui from tool adapters. Native `libghdl`/`libyosys` have global
+thread or update Qt widgets from tool adapters. Native `libghdl`/`libyosys` have global
 state and object-lifetime constraints; do not concurrently share native objects
 between callbacks. Process wrappers are the default for isolated jobs.
 
-Dear PyGui's callback signature can provide `sender`, `app_data`, and `user_data`.
-Your callback will translate that context into these tool calls. This scaffold
-intentionally supplies no callback implementations or application behavior.
+Use a worker for long tool jobs and deliver results to the GUI through Qt signals.
+The Qt workspace connects these adapters through the separate-process pipelines
+in `src/eitri/backend/pipeline.py`; see `docs/TOOLS.md`.
 
 References:
-- https://dearpygui.readthedocs.io/en/latest/documentation/item-callbacks.html
+- https://doc.qt.io/qtforpython-6/PySide6/QtCore/QThread.html
 - https://yosyshq.readthedocs.io/projects/yosys/en/stable/using_yosys/pyosys.html
 - https://github.com/nturley/netlistsvg

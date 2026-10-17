@@ -1,0 +1,86 @@
+"""Left-hand settings, grouped by workspace mode."""
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QComboBox, QFrame, QLineEdit, QScrollArea, QStackedWidget, QVBoxLayout, QWidget
+from .widgets import button, field, label
+
+
+class Sidebar(QScrollArea):
+    open_design_requested = Signal()
+    open_testbench_requested = Signal()
+    save_requested = Signal()
+    new_requested = Signal()
+    save_as_requested = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        sidebar = QFrame()
+        sidebar.setObjectName('sidebar')
+        sidebar.setMinimumWidth(230)
+        sidebar.setMinimumHeight(500)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(18, 16, 18, 12)
+        sidebar_layout.setSpacing(8)
+        # Shared inputs apply to both compilation pipelines.
+        sidebar_layout.addWidget(label('WORKSPACE SETTINGS', 'eyebrow'))
+        sidebar_layout.addSpacing(12)
+        sidebar_layout.addWidget(label('Source file', 'muted'))
+        self.file_path = label('Untitled · starter example')
+        self.file_path.setWordWrap(True)
+        sidebar_layout.addWidget(self.file_path)
+        sidebar_layout.addSpacing(8)
+        self.standard = QComboBox()
+        self.standard.addItems(['VHDL 2008', 'VHDL 2002', 'VHDL 1993'])
+        field(sidebar_layout, 'Language standard', self.standard)
+        self.entity = QLineEdit()
+        self.entity.setPlaceholderText('e.g. adder')
+        field(sidebar_layout, 'Top-level entity', self.entity)
+        # Only the options for the selected mode are visible; values persist.
+        self.options = QStackedWidget()
+        code_options = QWidget()
+        code_layout = QVBoxLayout(code_options)
+        code_layout.setContentsMargins(0, 8, 0, 0)
+        code_layout.addWidget(label('EDITOR', 'eyebrow'))
+        code_layout.addWidget(button('New design…', lambda: self.new_requested.emit()))
+        code_layout.addWidget(button('Open design…', lambda: self.open_design_requested.emit()))
+        code_layout.addWidget(button('Open testbench…', lambda: self.open_testbench_requested.emit()))
+        code_layout.addSpacing(12)
+        self.save_button = button('Save design', lambda: self.save_requested.emit())
+        self.save_as_button = button('Save design as…', lambda: self.save_as_requested.emit())
+        code_layout.addWidget(self.save_button)
+        code_layout.addWidget(self.save_as_button)
+        code_layout.addStretch()
+        self.options.addWidget(code_options)
+        # Simulation analyzes both tabs and elaborates the testbench entity.
+        sim_options = QWidget()
+        sim_layout = QVBoxLayout(sim_options)
+        sim_layout.setContentsMargins(0, 8, 0, 0)
+        self.testbench = field(sim_layout, 'Testbench entity', QLineEdit())
+        self.testbench.setPlaceholderText('e.g. adder_TB')
+        self.stop_time = field(sim_layout, 'Stop time', QLineEdit('200ns'))
+        self.wave_format = QComboBox()
+        self.wave_format.addItems(['VCD', 'GHW'])
+        field(sim_layout, 'Waveform format', self.wave_format)
+        sim_layout.addStretch()
+        self.options.addWidget(sim_options)
+        # Circuit generation synthesizes only the Design tab.
+        circuit_options = QWidget()
+        circuit_layout = QVBoxLayout(circuit_options)
+        circuit_layout.setContentsMargins(0, 8, 0, 0)
+        circuit_layout.addWidget(label('OUTPUT', 'eyebrow'))
+        circuit_layout.addWidget(label('SVG netlist schematic', 'muted'))
+        note = label('GHDL → Yosys → netlistsvg\nUses the Design tab only.', 'muted')
+        note.setWordWrap(True)
+        circuit_layout.addWidget(note)
+        circuit_layout.addStretch()
+        self.options.addWidget(circuit_options)
+        sidebar_layout.addWidget(self.options, 1)
+        # Keep settings reachable when the window is shorter than the form.
+        self.setWidgetResizable(True)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setMinimumWidth(250)
+        self.setWidget(sidebar)
+
+    def set_document_role(self, index):
+        role = ('design', 'testbench')[index]
+        self.save_button.setText(f'Save {role}')
+        self.save_as_button.setText(f'Save {role} as…')

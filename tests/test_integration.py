@@ -10,9 +10,9 @@ import netlistsvg
 pytestmark = pytest.mark.integration
 
 
-def test_dearpygui_import_without_creating_a_window():
-    import dearpygui.dearpygui as dpg
-    assert callable(dpg.add_button)
+def test_qt_import_without_creating_a_window():
+    from PySide6.QtWidgets import QMainWindow
+    assert callable(QMainWindow)
 
 
 def test_yosys_to_svg(tmp_path):
@@ -51,3 +51,26 @@ end;
     ghdl.run(['-a', '--std=08', 'hello.vhd'], cwd=tmp_path, capture_output=True, timeout=30)
     result = ghdl.run(['-r', '--std=08', 'hello'], cwd=tmp_path, capture_output=True, timeout=30)
     assert 'GHDL_ADAPTER_OK' in result.stdout + result.stderr
+
+
+def test_rom_templates_simulate(tmp_path):
+    ghdl = pytest.importorskip('ghdl')
+    fixtures = Path(__file__).parent / 'fixtures'
+    DESIGN_STARTER = (fixtures / 'ROM_16x32.vhd').read_text()
+    TESTBENCH_STARTER = (fixtures / 'ROM_16x32_TB.vhd').read_text()
+    (tmp_path / 'ROM_16x32.vhd').write_text(DESIGN_STARTER)
+    (tmp_path / 'ROM_16x32_TB.vhd').write_text(TESTBENCH_STARTER)
+    ghdl.run(['-a', '--std=08', 'ROM_16x32.vhd', 'ROM_16x32_TB.vhd'],
+             cwd=tmp_path, capture_output=True, timeout=30)
+    ghdl.run(['-r', '--std=08', 'ROM_16x32_TB', '--assert-level=error',
+              '--stop-time=200ns', '--vcd=rom.vcd'],
+             cwd=tmp_path, capture_output=True, timeout=30)
+    lines = (tmp_path / 'rom.vcd').read_text().splitlines()
+    output_id = next(line.split()[3] for line in lines
+                     if line.startswith('$var') and 'data_out[31:0]' in line)
+    actual = [line.split()[0][1:].upper() for line in lines
+              if line.startswith('b') and line.split()[1] == output_id]
+    expected = ['Z', 'DEADBEEF', 'Z', 'CAFEBABE', 'DEADFEED', 'BEEFCAFE',
+                'Z', 'B16B00B5', 'DEADD00D', 'Z']
+    assert actual == ['Z' * 32 if word == 'Z' else f'{int(word, 16):032b}'
+                      for word in expected]
