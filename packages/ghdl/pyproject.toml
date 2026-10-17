@@ -7,7 +7,7 @@ name = "ghdl-bundled"
 version = "6.0.0.post1"
 description = "Unofficial self-contained GHDL binaries and Python bindings"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 dependencies = ["pyTooling[terminal]~=8.12", "pyVHDLModel~=0.33"]

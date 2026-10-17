@@ -62,8 +62,9 @@ Older glibc and Alpine/musl are unsupported. macOS Intel and Windows ARM64
 are not built. Windows ARM64 needs a native Ada/toolchain/backend combination
 not covered by this project's build recipes; it is not just another wheel tag.
 
-Python 3.10+ is required. Wheels use `py3-none-PLATFORM` because bindings use
-ctypes rather than the CPython extension ABI. CI tests Python 3.10 and 3.14.
+Python 3.11+ is required by the bundled pyGHDL binding dependencies. Wheels use
+`py3-none-PLATFORM` because bindings use ctypes rather than the CPython extension
+ABI. CI tests Python 3.11 and 3.14.
 
 ## GitHub Actions
 

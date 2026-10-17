@@ -1,16 +1,22 @@
 """Installed-wheel integration test; intentionally independent of pytest."""
+from contextlib import chdir
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tempfile
 
 # Deliberately remove toolchain paths and existing GHDL configuration.
 for key in ("GHDL", "GHDL_PREFIX", "VUNIT_GHDL_PATH", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
     os.environ.pop(key, None)
-scripts = Path(sys.executable).parent
-os.environ["PATH"] = str(scripts)
+# Windows installs console launchers in Scripts, beside the interpreter's
+# directory. sysconfig also handles virtual environments and POSIX bin paths.
+scripts = Path(sysconfig.get_path("scripts"))
+os.environ["PATH"] = os.pathsep.join(dict.fromkeys([
+    str(scripts), str(Path(sys.executable).parent),
+]))
 if os.name == "nt":
     os.environ["PATH"] += os.pathsep + str(Path(os.environ["SystemRoot"]) / "System32")
 
@@ -29,8 +35,8 @@ for command in ("ghdl-dom", "ghdl-ls"):
 result = ghdl.run(["--version"], capture_output=True)
 assert "GHDL 6.0.0" in result.stdout
 
-with tempfile.TemporaryDirectory(prefix="ghdl wheel smoke ") as directory:
-    os.chdir(directory)
+# Restore cwd before TemporaryDirectory cleanup; Windows cannot remove cwd.
+with tempfile.TemporaryDirectory(prefix="ghdl wheel smoke ") as directory, chdir(directory):
     Path("gate.vhd").write_text('''
 library ieee;
 use ieee.std_logic_1164.all;

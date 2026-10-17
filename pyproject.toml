@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "eitri"
 version = "0.1.0"
 description = "Development workspace for a Python HDL desktop application"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
