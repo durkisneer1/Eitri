@@ -1,6 +1,6 @@
 """Read digital VCD signals without a GUI or third-party parser.
 
-Preserve hierarchical aliases and X/Z values. Bounded previews keep very large
+Preserve hierarchical aliases and VHDL logic states. Bounded previews keep very large
 simulations from exhausting the UI; the complete VCD remains exportable.
 """
 from bisect import bisect_right
@@ -59,7 +59,7 @@ def parse_vcd(path):
                     if len(parts) != 2:
                         continue
                     value, code = parts
-                elif line[0] in '01xXzZ':
+                elif line[0] in '01uUxXzZwWlLhH-':
                     value, code = line[0], line[1:]
                 else:
                     continue
@@ -85,7 +85,10 @@ def value_at(signal, timestamp):
 
 
 def format_value(value, width, radix='Hex'):
-    if 'X' in value or 'Z' in value:
+    # Only binary digits have a numeric representation. Keep std_logic
+    # states (including U, W, L, H and -) visible in every radix.
+    value = value.upper()
+    if not value or any(bit not in '01' for bit in value):
         return value if width == 1 else (value[0] if len(set(value)) == 1 else value)
     number = int(value, 2)
     if radix == 'Binary' or width == 1:

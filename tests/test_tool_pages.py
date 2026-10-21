@@ -226,3 +226,30 @@ end;"""
         else:
             assert all(cell['type'] not in netlist['modules'] for cell in cells.values())
             assert result['cells'] > 4
+
+
+@pytest.mark.integration
+def test_ram_simple_preserves_memory_detailed_expands_it(tmp_path):
+    from eitri.backend.pipeline import run_pipeline
+    pytest.importorskip('ghdl')
+    source = (Path(__file__).parent / 'fixtures' / 'RAM_16x32Bits.vhd').read_text()
+    counts = {}
+    for detail in ('Simple', 'Detailed'):
+        directory = tmp_path / detail
+        result = run_pipeline(dict(kind='circuit', standard='VHDL 2008',
+                                   entity='RAM_16x32Bits', design=source,
+                                   circuit_detail=detail), directory, log=lambda _: None)
+        netlist = json.loads((directory / 'netlist.json').read_text())
+        cells = netlist['modules'][result['top']]['cells'].values()
+        types = {cell['type'] for cell in cells}
+        counts[detail] = result['cells']
+        if detail == 'Simple':
+            memory = next(cell for cell in cells if cell['type'] == '$mem_v2')
+            assert int(memory['parameters']['WIDTH'], 2) == 32
+            assert int(memory['parameters']['SIZE'], 2) == 16
+        else:
+            assert not any(kind.startswith('$mem') for kind in types)
+            assert '$dff' in types
+            assert '$dffe' not in types
+        assert (directory / 'schematic.svg').stat().st_size > 0
+    assert counts['Simple'] < counts['Detailed']

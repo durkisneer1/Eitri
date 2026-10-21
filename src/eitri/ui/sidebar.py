@@ -70,7 +70,7 @@ class Sidebar(QScrollArea):
         self.circuit_detail = QComboBox()
         self.circuit_detail.addItems(['Simple', 'Detailed'])
         self.circuit_detail.setCurrentText('Detailed')
-        self.circuit_detail.setToolTip('Simple preserves component instances as boxes. Detailed expands them into logic.')
+        self.circuit_detail.setToolTip('Simple preserves components and memories as blocks. Detailed expands them into registers and logic.')
         field(circuit_layout, 'Circuit detail', self.circuit_detail)
         circuit_layout.addWidget(label('SVG netlist schematic', 'muted'))
         note = label('GHDL → Yosys → netlistsvg\nUses the Design tab only.', 'muted')

@@ -1,5 +1,5 @@
 """Vector schematic viewer with pan/zoom and export controls."""
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtSvgWidgets import QGraphicsSvgItem
@@ -51,8 +51,28 @@ class SchematicView(QGraphicsView):
         self.fitInView(self.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio)
 
     def wheelEvent(self, event):
-        self.zoom_by(1.2 if event.angleDelta().y() > 0 else 1 / 1.2)
-        event.accept()
+        # Trackpad swipes (including momentum) are scrolling, not zooming.
+        delta = event.pixelDelta()
+        if not delta.isNull():
+            for bar, distance in ((self.horizontalScrollBar(), delta.x()),
+                                  (self.verticalScrollBar(), delta.y())):
+                bar.setValue(bar.value() - distance)
+            event.accept()
+        else:
+            super().wheelEvent(event)
+
+    def viewportEvent(self, event):
+        if event.type() == QEvent.Type.NativeGesture:
+            kind = event.gestureType()
+            if kind == Qt.NativeGestureType.ZoomNativeGesture:
+                self.zoom_by(1 + event.value())
+                event.accept()
+                return True
+            if kind in (Qt.NativeGestureType.BeginNativeGesture,
+                        Qt.NativeGestureType.EndNativeGesture):
+                event.accept()
+                return True
+        return super().viewportEvent(event)
 
 
 class CircuitPage(JobPage):
@@ -80,7 +100,7 @@ class CircuitPage(JobPage):
         self.svg_file = path
         self.save_svg.setEnabled(True)
         self.has_result = True
-        self.status.setText(f'{result["top"]} · {result.get("detail", "Detailed")} · {result["cells"]} cells · {result["ports"]} ports. Drag to pan; scroll to zoom.')
+        self.status.setText(f'{result["top"]} · {result.get("detail", "Detailed")} · {result["cells"]} cells · {result["ports"]} ports. Drag or scroll to pan; pinch or use +/− to zoom.')
 
     def export_svg(self):
         if self.svg_file:

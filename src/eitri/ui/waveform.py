@@ -22,6 +22,8 @@ class WaveformView(QAbstractScrollArea):
         self.radix = 'Hex'
         self.horizontalScrollBar().valueChanged.connect(self.viewport().update)
         self.verticalScrollBar().valueChanged.connect(self.viewport().update)
+        self.horizontalScrollBar().setSingleStep(40)
+        self.verticalScrollBar().setSingleStep(self.ROW)
         self.setMinimumHeight(100)
 
     def set_data(self, signals, end_time, timescale):
@@ -56,6 +58,18 @@ class WaveformView(QAbstractScrollArea):
         self.update_ranges()
         self.viewport().update()
 
+    def wheelEvent(self, event):
+        # QAbstractScrollArea's default wheel handling uses angle steps. Honor
+        # high-resolution trackpad pixels directly, on both axes.
+        delta = event.pixelDelta()
+        if not delta.isNull():
+            for bar, distance in ((self.horizontalScrollBar(), delta.x()),
+                                  (self.verticalScrollBar(), delta.y())):
+                bar.setValue(bar.value() - distance)
+            event.accept()
+        else:
+            super().wheelEvent(event)
+
     def mousePressEvent(self, event):
         if event.position().x() >= self.LEFT:
             width = max(1, self.viewport().width() - self.LEFT)
@@ -66,7 +80,10 @@ class WaveformView(QAbstractScrollArea):
         super().mousePressEvent(event)
 
     def paintEvent(self, event):
-        painter = QPainter(self.viewport())
+        with QPainter(self.viewport()) as painter:
+            self._paint_waveform(painter)
+
+    def _paint_waveform(self, painter):
         painter.fillRect(self.viewport().rect(), QColor('#242423'))
         if not self.signals:
             painter.setPen(QColor('#aaa59b'))
@@ -102,40 +119,41 @@ class WaveformView(QAbstractScrollArea):
             first = max(0, bisect_right(events, start, key=lambda item: item[0]) - 1)
             last = bisect_left(events, stop, key=lambda item: item[0])
             painter.save()
-            painter.setClipRect(self.LEFT, self.TOP, width, self.viewport().height() - self.TOP)
-            # Dense traces need zooming; drawing hundreds of thousands of edges
-            # on each mouse click would stall the GUI with no useful detail.
-            if last - first > 2000:
-                painter.fillRect(QRectF(self.LEFT, y + 8, width, 20), QColor('#716044'))
-                painter.setPen(QColor('#e5dfd3'))
-                painter.drawText(QRectF(self.LEFT + 8, y, width - 8, self.ROW), Qt.AlignmentFlag.AlignVCenter, 'Dense transitions — zoom in')
-                painter.restore()
-                continue
-            segments = events[first:last + 1] if events else [[0, 'X']]
-            if segments and segments[0][0] > start:
-                segments = [[start, 'X']] + segments
-            for index, (timestamp, value) in enumerate(segments):
-                end = segments[index + 1][0] if index + 1 < len(segments) else self.end
-                left, right = max(self.LEFT, x(timestamp)), min(self.viewport().width(), x(end))
-                if right <= left:
+            try:
+                painter.setClipRect(self.LEFT, self.TOP, width, self.viewport().height() - self.TOP)
+                # Dense traces need zooming; drawing hundreds of thousands of edges
+                # on each mouse click would stall the GUI with no useful detail.
+                if last - first > 2000:
+                    painter.fillRect(QRectF(self.LEFT, y + 8, width, 20), QColor('#716044'))
+                    painter.setPen(QColor('#e5dfd3'))
+                    painter.drawText(QRectF(self.LEFT + 8, y, width - 8, self.ROW), Qt.AlignmentFlag.AlignVCenter, 'Dense transitions — zoom in')
                     continue
-                color = '#c8877c' if 'X' in value else ('#a49aac' if 'Z' in value else '#b9c4a1')
-                painter.setPen(QPen(QColor(color), 1.4))
-                high, low = y + 8, y + 28
-                if signal['width'] == 1 and value in ('0', '1'):
-                    level = high if value == '1' else low
-                    painter.drawLine(QPointF(left, level), QPointF(right, level))
-                    if timestamp > 0:
-                        painter.drawLine(QPointF(left, high), QPointF(left, low))
-                else:
-                    inset = min(4, (right - left) / 3)
-                    painter.drawPolygon(QPolygonF([QPointF(left, y + 18), QPointF(left + inset, high),
-                        QPointF(right - inset, high), QPointF(right, y + 18),
-                        QPointF(right - inset, low), QPointF(left + inset, low)]))
-                    text = format_value(value, signal['width'], self.radix)
-                    if right - left > painter.fontMetrics().horizontalAdvance(text) + 12:
-                        painter.drawText(QRectF(left + 5, high, right - left - 10, 20), Qt.AlignmentFlag.AlignCenter, text)
-            painter.restore()
+                segments = events[first:last + 1] if events else [[0, 'X']]
+                if segments and segments[0][0] > start:
+                    segments = [[start, 'X']] + segments
+                for index, (timestamp, value) in enumerate(segments):
+                    end = segments[index + 1][0] if index + 1 < len(segments) else self.end
+                    left, right = max(self.LEFT, x(timestamp)), min(self.viewport().width(), x(end))
+                    if right <= left:
+                        continue
+                    color = '#c8877c' if any(bit in value for bit in 'UXW-') else ('#a49aac' if 'Z' in value else '#b9c4a1')
+                    painter.setPen(QPen(QColor(color), 1.4))
+                    high, low = y + 8, y + 28
+                    if signal['width'] == 1 and value in ('0', '1'):
+                        level = high if value == '1' else low
+                        painter.drawLine(QPointF(left, level), QPointF(right, level))
+                        if timestamp > 0:
+                            painter.drawLine(QPointF(left, high), QPointF(left, low))
+                    else:
+                        inset = min(4, (right - left) / 3)
+                        painter.drawPolygon(QPolygonF([QPointF(left, y + 18), QPointF(left + inset, high),
+                            QPointF(right - inset, high), QPointF(right, y + 18),
+                            QPointF(right - inset, low), QPointF(left + inset, low)]))
+                        text = format_value(value, signal['width'], self.radix)
+                        if right - left > painter.fontMetrics().horizontalAdvance(text) + 12:
+                            painter.drawText(QRectF(left + 5, high, right - left - 10, 20), Qt.AlignmentFlag.AlignCenter, text)
+            finally:
+                painter.restore()
         painter.setClipping(False)
         cursor_x = x(self.cursor)
         if self.LEFT <= cursor_x <= self.viewport().width():

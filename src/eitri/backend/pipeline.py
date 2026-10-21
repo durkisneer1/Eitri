@@ -99,10 +99,12 @@ def run_pipeline(request, directory, log=print):
         log(lowered.stderr)
     (directory / 'design.v').write_text(lowered.stdout, encoding='utf-8')
     # -auto-top avoids case differences between VHDL names and emitted Verilog.
-    # memory_map makes ROM logic explicit for netlistsvg's generic cell renderer.
+    # Simple retains inferred memories and component boundaries. Detailed
+    # expands both, keeping register enables as explicit muxes so the stock
+    # renderer can draw DFF symbols instead of generic $dffe boxes.
     detail = request.get('circuit_detail', 'Detailed')
-    passes = ('proc; memory_map; clean; ' if detail == 'Simple'
-              else 'proc; flatten -noscopeinfo; opt; memory_map; opt; clean; ')
+    passes = ('proc; opt; memory -nomap; opt; clean; ' if detail == 'Simple'
+              else 'proc; flatten -noscopeinfo; opt -nodffe -nosdff; memory_map; opt -nodffe -nosdff; clean; ')
     script = ('read_verilog design.v; hierarchy -check -auto-top; '
               + passes + 'stat; write_json netlist.json')
     invoke('Build Yosys netlist', yosys.run_script, script, cwd=directory, timeout=180)
