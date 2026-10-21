@@ -6,6 +6,20 @@ I wanted to work at home without installing a 30–40 GB Vivado setup full of fe
 
 With Eitri, I can write designs and testbenches, reuse components, simulate signals, and see how my code becomes a circuit all in one app. It uses PySide6 for the interface, GHDL for VHDL simulation and synthesis, and Yosys with netlistsvg for circuit diagrams. My focus is learning and experimenting with VHDL, not replacing a complete FPGA implementation toolchain.
 
+## Folder projects and component hierarchies
+
+The source workspace now opens folders, keeps a buffer for each file, and runs
+named simulation/circuit targets independently of the active editor. Explore
+component instances in the interactive hierarchy diagram, inspect their port
+maps, and jump between definitions and instantiations. Run all testbenches,
+follow assertion failures to source, or expand one component inside a circuit.
+
+![Interactive CPU component hierarchy](docs/screenshots/component-hierarchy.png)
+
+Start with [the tiny learning CPU](examples/learning_cpu/README.md): its adder,
+ALU and CPU tests demonstrate how a leaf-component edit affects the hierarchy.
+See the [folder editor guide](docs/EDITOR.md) and [run-target guide](docs/TOOLS.md).
+
 ## A look inside
 
 These screenshots show my 4-bit full adder, built from four 1-bit adders.
@@ -26,7 +40,7 @@ These screenshots show my 4-bit full adder, built from four 1-bit adders.
 
 ## Running Eitri
 
-Eitri is available on [PyPI as `eitri-hdl`](https://pypi.org/project/eitri-hdl/). Install it with Python 3.11 or newer:
+Eitri is available on [PyPI as `eitri-hdl`](https://pypi.org/project/eitri-hdl/). Supported Python versions are 3.11–3.15:
 
 ```sh
 python -m pip install eitri-hdl
@@ -39,6 +53,10 @@ eitri
 ```
 
 If you installed into a virtual environment, activate it before running `eitri`. You can also launch the app with `python -m eitri`.
+
+The app starts blank. Click **Open folder…** to choose your project.
+Python 3.15 supports the editor, simulation, and circuit generation; the optional
+direct native `yosys.libyosys()` API requires a separately available `pyosys` build.
 
 [Editor guide](https://github.com/durkisneer1/Eitri/blob/main/docs/EDITOR.md) · [Simulation and circuit tools](https://github.com/durkisneer1/Eitri/blob/main/docs/TOOLS.md) · [GPL-3.0-or-later license](https://github.com/durkisneer1/Eitri/blob/main/LICENSE)
 

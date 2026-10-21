@@ -67,7 +67,7 @@ class NewDesignDialog(QDialog):
         layout.addWidget(self.error)
         # Validation leaves the dialog open and preserves everything entered.
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-        buttons.button(QDialogButtonBox.StandardButton.Save).setText('Next: Components…')
+        buttons.button(QDialogButtonBox.StandardButton.Save).setText('Create source…')
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

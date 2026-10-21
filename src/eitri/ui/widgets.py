@@ -11,7 +11,7 @@ def label(text, name=None):
 
 def button(text, callback, name=None):
     widget = QPushButton(text)
-    widget.clicked.connect(callback)
+    widget.clicked.connect(lambda checked=False: callback())
     if name:
         widget.setObjectName(name)
     return widget

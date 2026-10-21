@@ -1,8 +1,8 @@
 """Qt text editor with a line-number gutter and VHDL lexical highlighting."""
 import re
 
-from PySide6.QtCore import QRect, QSize, Qt
-from PySide6.QtGui import QColor, QFontDatabase, QPainter, QTextFormat
+from PySide6.QtCore import QEvent, QRect, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFontDatabase, QPainter, QTextFormat, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import QPlainTextEdit, QTextEdit, QWidget
 from .highlighting import VhdlHighlighter
 from .fonts import monospace_family
@@ -20,6 +20,9 @@ class LineNumbers(QWidget):
 
 
 class CodeEditor(QPlainTextEdit):
+    hover_requested = Signal(object, object)
+    definition_requested = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
@@ -29,6 +32,7 @@ class CodeEditor(QPlainTextEdit):
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.setTabStopDistance(self.fontMetrics().horizontalAdvance(' ') * 4)
         self.setPlaceholderText('Write VHDL here, or open a source file…')
+        self.diagnostics = []
         self.gutter = LineNumbers(self)
         self.highlighter = VhdlHighlighter(self.document())
         self.blockCountChanged.connect(self.update_gutter_width)
@@ -62,7 +66,20 @@ class CodeEditor(QPlainTextEdit):
         selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
         selection.cursor = self.textCursor()
         selection.cursor.clearSelection()
-        self.setExtraSelections([selection])
+        selections = [selection]
+        from .language_server import cursor_at
+        for diagnostic in self.diagnostics:
+            mark = QTextEdit.ExtraSelection()
+            mark.cursor = cursor_at(self, diagnostic['range']['start'])
+            end = cursor_at(self, diagnostic['range']['end']).position()
+            if end <= mark.cursor.position():
+                end = min(mark.cursor.position() + 1, self.document().characterCount() - 1)
+            mark.cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
+            mark.format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.WaveUnderline)
+            mark.format.setUnderlineColor(QColor('#e58c7c' if diagnostic.get('severity', 1) == 1 else '#d1b578'))
+            mark.format.setToolTip(diagnostic['message'])
+            selections.append(mark)
+        self.setExtraSelections(selections)
         self.gutter.update()
 
     def paint_gutter(self, event):
@@ -81,8 +98,29 @@ class CodeEditor(QPlainTextEdit):
             top += height
             block = block.next()
 
+    def set_diagnostics(self, diagnostics):
+        self.diagnostics = diagnostics
+        self.highlight_line()
+
+    def viewportEvent(self, event):
+        if event.type() == QEvent.Type.ToolTip:
+            from .language_server import server_position
+            self.hover_requested.emit(server_position(self.cursorForPosition(event.pos())), event.globalPos())
+            return True
+        return super().viewportEvent(event)
+
+    def contextMenuEvent(self, event):
+        menu = self.createStandardContextMenu()
+        menu.addSeparator()
+        action = menu.addAction('Go to definition (F12)')
+        action.triggered.connect(self.definition_requested.emit)
+        menu.exec(event.globalPos())
+        menu.deleteLater()
+
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Tab and not self.textCursor().hasSelection():
+        if event.key() == Qt.Key.Key_F12:
+            self.definition_requested.emit()
+        elif event.key() == Qt.Key.Key_Tab and not self.textCursor().hasSelection():
             self.insertPlainText('    ')
         elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and not self.textCursor().hasSelection():
             cursor = self.textCursor()

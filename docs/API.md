@@ -31,7 +31,7 @@ Verilog file, then use Yosys. GHDL's supported VHDL synthesis subset applies.
 | `ghdl.libghdl()` | Upstream low-level API module | In-process native library |
 | `yosys.run(args, ...)` | `subprocess.CompletedProcess[str]` | Blocking, isolated YoWASP process |
 | `yosys.run_script(script, ...)` | Same | Same, Yosys command language |
-| `yosys.libyosys()` | `pyosys.libyosys` | In-process native library, macOS/Linux |
+| `yosys.libyosys()` | `pyosys.libyosys` | In-process native library, macOS/Linux, bundled dependency on Python 3.11–3.14 |
 | `netlistsvg.render(json_path, svg_path, skin=None, timeout=60)` | Absolute `Path` to SVG | Blocking, isolated Node process |
 | `gtkwave.launch(waveform, savefile=None, ...)` | `subprocess.Popen` | Returns immediately; separate viewer window |
 | `gtkwave.is_available()` | `bool` | Checks discovery; no viewer launch |

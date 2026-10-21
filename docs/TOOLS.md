@@ -1,84 +1,73 @@
-# Simulation and Circuit
+# Simulation and circuit targets
 
-Both pages run the **current editor text**, including unsaved changes. Each run
-gets its own source snapshot and build directory. You can keep editing while a
-run proceeds; changed inputs mark the displayed results as out of date.
+Open a folder, then choose a **Simulation target** or **Circuit target** in the
+left panel. Targets identify entities and architectures, not editor roles.
+Editing an adder does not change a selected CPU testbench. Right-click a source
+file to choose a target from that file. F5 runs the selected simulation; F6
+builds the selected circuit.
+
+**Configure / save target** gives a run a reusable name and optional generic
+overrides. Stop time, waveform format and circuit detail are set on their pages
+and saved when run. Sources come from a project snapshot that includes unsaved
+changes in every open buffer. Package and component dependencies are ordered
+before their users. Diagnostics map back to the original source paths;
+double-click an error/assertion location in the log to open it.
+
+Each run has an immutable source snapshot and exportable artifacts. Editing
+while a run is active cannot change it. Older results are marked stale after
+source changes. Exports include `source_*.vhd`, `sources.json` mapping those
+files to their original paths, `request.json`, `run.log`, and generated outputs.
+
+Analysis is cached outside the project by project, target, language standard,
+tool version and source/library list. Unchanged analyzed prefixes are reused;
+a changed source and subsequent files in dependency order are reanalyzed.
+Only successfully analyzed states are cached. Concurrent workers use isolated
+analysis directories if a cache is busy. Simulation results and source exports
+are always fresh. Interrupted cache owners may leave a lock; subsequent runs
+safely use isolated analysis until that cache is cleared.
 
 ## Simulation
 
-Component dependencies are resolved recursively and snapshotted from disk before either pipeline runs. The run log maps dependency snapshot filenames back to their original paths; exported runs include the dependency snapshots. See [EDITOR.md](EDITOR.md) for reference and discovery rules.
+GHDL analyzes the selected target's dependencies, elaborates its architecture,
+and simulates with generic overrides until completion or the selected stop time.
+Assertion severity error/failure fails a run. A successful process exit means
+no failing assertion was encountered, not that the design has complete test
+coverage. Add explicit assertions and timeout/watchdog checks to your tests.
 
-1. Set the VHDL standard, testbench entity and stop time in the left panel.
-2. Click **Run simulation**, or press **F5**. GHDL analyzes Design then Testbench,
-   elaborates the testbench, and runs until it finishes or reaches the stop time.
-3. Check signals in the list to show them in the timing diagram. The filter
-   narrows the list, while checked waveforms remain visible.
-4. Click the diagram to move the time cursor. The signal list shows each value
-   at that time. Choose Hex, Binary or Unsigned, zoom with +/−, and use Fit to
-   restore the whole time range. Scroll horizontally when zoomed.
-5. Export the waveform, export the complete run, or open it in GTKWave.
+**Run all tests** snapshots discovered no-port testbench targets and saved
+simulation targets, then runs them sequentially. The **Tests** explorer tab
+shows queued/running/passed/failed/cancelled results. Activate a result to reopen
+its log and waveforms. A failed test does not prevent the remaining tests from
+running. Stop cancels both the active simulation and queued tests.
 
-Generated testbenches start with an empty stimulus process. Add input changes,
-a clock if needed, and assertions before running. The default stop time is 200 ns.
-GHDL assertion errors fail the run and appear in the output panel.
+Check signals to display them. Checked signal names are remembered per target.
+Choose Binary, Hex or Unsigned; VHDL uninitialized/unknown states remain visible.
+Click the waveform to move the cursor, use +/− and Fit to zoom, and pan with
+trackpad scrolling. VCD powers the embedded preview; GHW output also produces a
+VCD preview. Export individual waveforms or a ZIP of the complete run.
+GTKWave is an optional external viewer.
 
-The embedded viewer reads VCD. Selecting GHW writes both VCD for the preview and
-GHW for export/GTKWave. GTKWave is an optional external installation; its absence
-does not prevent simulation or embedded waveform viewing.
+The default stop time is 200 ns. Preview limits are 64 MB, 150,000 changes and
+512 signals. Dense traces ask you to zoom in. Real/string signals are omitted
+from the digital preview. The full waveform remains available for export.
+Workers stop after ten minutes or if their VCD exceeds 256 MB.
 
-## Circuit
+## Circuits
 
-Set the top-level entity, then click **Generate circuit** or press **F6**. The
-pipeline synthesizes the Design tab and dependencies with GHDL, lowers them to Verilog, processes them
-with Yosys, maps memories into logic, and renders the netlist with netlistsvg.
+GHDL lowers the selected hierarchy to Verilog; Yosys builds a netlist and
+netlistsvg draws it. **Simple** keeps component and memory blocks. **Detailed**
+expands hierarchy and inferred memory into registers and logic.
 
-Choose **Simple** to preserve direct component instances as labeled boxes with ports and connections, or **Detailed** (the default) to flatten components into their internal logic. Click **Generate circuit** after changing the option. Simple is a top-level hierarchy view: a 4-bit adder built from four 1-bit adders shows four boxes; a design with no child instances still shows its own logic. Boxes do not expand interactively. Yosys scope metadata is excluded from drawings and displayed cell counts.
-The Testbench tab is excluded from synthesis.
+In a Simple circuit, select a component and choose **Expand** to replace that
+component with its implementation while retaining sibling blocks. **Collapse
+all** restores the block view. Expansion rerenders the displayed run's immutable
+source snapshot; regenerate the target to include newer edits.
 
-Schematics use the app palette: slate gates/component boxes, brass wires and sage ports on a charcoal canvas. Component instances have short headers and a separate type label; pin labels sit inside wider boxes. The router leaves additional space between nodes and wires. These styles also apply to exported SVGs.
+Two-finger scrolling pans; pinching zooms. Dragging, +/− and Fit also work.
+SVG exports preserve vector detail and the display theme. Original synthesis
+netlists retain X/Z constants; renderer-only `Unknown (X)` and `High impedance
+(Z)` boxes make those values visible. X may represent an inactive don't-care
+input rather than a faulty design.
 
-Drag the schematic to pan, scroll or use +/− to zoom, and click Fit for an overview.
-The summary shows the top module, cell count and port count. Export SVG saves the
-vector drawing; Export run also includes Verilog, original Yosys JSON, the
-renderer-specific JSON, source snapshot, settings and diagnostics.
-
-Z constants are drawn as labeled **High impedance (Z)** source boxes.
-X constants use **Unknown (X)** boxes. These are display helpers because the
-pinned renderer cannot handle those constants directly; the original
-`netlist.json` is unmodified. SVG CSS is inlined so Qt renders wires correctly.
-The diagram is a synthesized logical schematic, not device placement/routing.
-
-## Jobs, diagnostics and files
-
-Run and Stop are independent per page. Tool subprocesses never run on Qt's event
-thread. Stage names update while the job runs; captured compiler/tool output
-appears after each stage. The output panel can be resized with its splitter.
-A failed or stopped run preserves the previous view, clearly labeled as such.
-Closing during execution offers to stop the jobs before handling unsaved files.
-
-Run files live in `QStandardPaths.CacheLocation/runs` (Eitri's platform cache
-folder). They persist across launches until the cache is cleaned. Use **Export
-run** to save a ZIP permanently; it includes source text and settings as well as
-results. No file is uploaded. Failed runs can also be exported for debugging.
-Diagnostics refer to `design.vhd` and `testbench.vhd`, corresponding to the two
-editor tabs, regardless of their saved filenames.
-
-## Current supported scope
-
-- Two source buffers: the design and testbench may contain multiple VHDL design
-  units. Component sources are resolved from tracked references and sibling files.
-  There is no vendor IP setup or external library mapping yet.
-- Basic VHDL entity identifiers and standards 1993, 2002 and 2008. Stop times are
-  positive integers with fs, ps, ns, us, ms or sec units.
-- Digital VCD preview preserves hierarchy, aliases and X/Z values. Real/string
-  signals require the external viewer. Preview limits are 64 MB, 512 signals and
-  150,000 changes; a visible warning explains any truncation. Complete waveform
-  data remains available for export. Dense traces require zooming for detail.
-- GHDL's synthesizable VHDL subset applies. Unsupported constructs and tool
-  errors appear in the log; no schematic is fabricated on failure.
-- Stages have finite timeouts, whole jobs have a 10-minute limit, and a VCD over
-  256 MB stops the job to avoid runaway simulation output. Shorten the stop time
-  when needed. The UI log keeps 3,000 lines; the full run log remains on disk.
-
-End-to-end tests exercise the actual ROM simulation (including GHW), synthesis,
-SVG rendering, invalid input, failed compilation, export and cancellation.
+Use **Component hierarchy** to explore source relationships and port maps
+without synthesis, then compare that structure with the circuit implementation.

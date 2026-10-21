@@ -1,46 +1,109 @@
-# Qt workspace
+# Folder workspace
 
-Run `python -m eitri` in the project virtual environment. PySide6-Essentials supplies Qt Core, Gui and Widgets; no browser or WebEngine is needed. The previous Dear PyGui version remains in Git history.
+Run `PYTHONPATH=src .venv/bin/python -m eitri` from the source checkout, or
+launch the installed `eitri` command. The app starts with a blank editor;
+choose **Open folder…** when you are ready to select a project. On macOS this
+uses Qt's folder picker instead of the native Finder panel. The left panel
+scrolls when the window is too short to fit the explorer and target settings.
+Try [the learning CPU](../examples/learning_cpu/README.md) for a complete example.
 
-The workspace provides a charcoal and aged-brass theme with a Copperplate wordmark (Palatino/Georgia fallback), Code / Simulation / Circuit navigation icons centered beneath the wordmark in the left column, with tooltips, an edge-to-edge split workspace with a draggable sidebar divider and full-height right-hand pages, and native open/save dialogs.
+## Files and editing
 
-On launch, choose **Open existing design** or **Create new design**. New designs ask for an entity name and optional ports: input/output, STD_LOGIC or STD_LOGIC_VECTOR, and vector width. A width of 8 generates (7 downto 0). Click **Next: Components…** to optionally import existing VHDL entities and choose an instance count for each. With no components, the saved file contains only the entity and an empty architecture.
+The left explorer lists VHDL files recursively. Select a file to display it in
+one editor area. Every open file retains its unsaved buffer, undo history,
+cursor and scroll position when you switch files. There are no special Design
+or Testbench document roles. **Quick open** (Command/Ctrl+P) offers a searchable
+file selector. **Save all** is Command/Ctrl+Alt+S.
 
-The Components step generates only component declarations and instance templates with named port maps, such as `A => <A>`. Replace every angle-bracket placeholder with your connection before compiling. Declare only the internal signals you need—for example, three signals for a four-adder carry chain. No per-port signals are generated. Generic defaults remain in the component declaration; add a generic map when you need overrides. **Back** returns to the ports form.
+The explorer's context menu can open a file, simulate an entity in it, generate
+its circuit, create a testbench, or insert an instance into the current editor.
+Normal F5/F6 commands run the selected named target, independently of the file
+being edited. If a file offers multiple runnable entities/architectures, Eitri
+asks which one to use.
 
-Component source files stay separate. New designs record their paths in VHDL comments such as `-- eitri-source: "../components/FullAdder.vhd"`. Paths are relative to the containing file (absolute when Windows drive boundaries require it). They survive reopening, and Save As rebases them to keep pointing to the same files. Keep referenced files with the design when sharing it.
+Files changed externally reload automatically when their buffers are clean.
+Dirty buffers show **Reload from disk** / **Keep my edits**, and saving also
+checks for a conflicting disk version. Opening a different project or closing
+the application checks every dirty buffer. UTF-8 writes use QSaveFile so a
+partial write does not replace the original. Generated source never replaces
+an existing file without confirmation.
 
-Before each run, Eitri follows these references recursively and resolves component declarations and direct `entity work.Name` instantiations against sibling .vhd/.vhdl files. It matches entity names, not filenames. Missing sources, ambiguous definitions and circular dependencies produce an error before tools start. Explicit references choose between ambiguous sibling definitions. Current disk contents are snapshotted with the two editor buffers, and dependencies compile before their parent designs. Edited dependency files are picked up on the next run; existing results are snapshots.
+**New design** creates an entity/architecture skeleton. **Insert instance**
+reads a project entity and inserts a direct instantiation with a unique label,
+generic defaults and named port-map placeholders. Replace `<...>` with actual
+connections before compiling. **Create testbench** generates the interface,
+signals and an empty stimulus process; its destination is selectable. Package
+context clauses and custom port types are retained. Initial values are supplied
+for STD_LOGIC inputs; custom types may need manual initialization. Clocks,
+resets, stimulus and assertions are always written by the user.
 
-This resolver supports basic entity names in the work library. External library mapping, automatic package discovery and configuration-based bindings are not supported; package sources can be included explicitly in dependency order. Existing files with embedded component implementations continue to work without migration. The component-import form retains the same STD_LOGIC interface restrictions as testbench generation.
+## VHDL assistance
 
+The bundled GHDL language server runs in its own process. It receives the same
+folder sources and open-buffer overrides used by builds, with the selected
+VHDL standard and configured libraries. Edits synchronize after a 400 ms pause.
+Errors/warnings appear underlined and in the problem list, including problems
+in files not currently open. Activate a problem to navigate to its location.
+Hover shows declaration information; F12 or **Go to definition** opens the
+source. Project files remain editable; external standard-library files open
+read-only. Switching documents does not discard any edits.
 
-On the Design tab, **Create Testbench** reads the current design text and writes a sibling file: adder.vhd becomes adder_TB.vhd (or .vhdl remains .vhdl). The testbench entity uses the design entity name plus _TB, even if the filename differs. It includes a component declaration, connected signals, initialized inputs and an empty stimulus process. Add your own clock, input changes and assertions. Existing testbench files require confirmation before replacement.
+Turn **VHDL assistance** off to stop the server. If it fails, the status tooltip
+shows the error; toggle off/on to retry. The bundled server does not support
+completion or rename. GHDL LS uses Latin-1 source columns; unsupported Unicode
+characters are replaced only in its analysis copy, never in the saved UTF-8 file.
 
-Generation supports STD_LOGIC and constrained STD_LOGIC_VECTOR ports, grouped port names, and integer/positive/natural/boolean generics with defaults. Unsupported interfaces show an explanation; they can still be edited manually. Files with multiple entities prompt you to select one.
+Lexical highlighting, four-space Tab insertion, carried indentation, line
+numbers, Undo/Redo and Find work independently of the server.
 
-The preferred launch size is 1140 × 620, reduced automatically to leave room on smaller screens. Code contains independent Design and Testbench tabs, each retaining its file, edits, cursor position and undo history. New starts a new design/testbench pair. **Open design…** checks both buffers for unsaved changes and clears the old testbench; **Open testbench…** changes only the testbench, regardless of the selected tab. Both explicit Open actions and context-labeled Save actions live in the Code sidebar. Save, Undo and Find act on the selected tab. Closing checks both tabs. Settings remain in memory while switching modes.
+## Component hierarchy
 
+The explorer's **Hierarchy** tab provides source navigation. The separate
+**Component hierarchy** view (F7) draws instance cards and parent/child edges.
+Choose a root entity/architecture. Select a card to see its source, instance
+path, generic map and port associations. Open its definition or wiring, or
+request a circuit for that component. Double-click a parent to expand/collapse;
+use Fit, pinch zoom, two-finger pan and SVG export.
 
-## Editor
+This is a source hierarchy, not a simulator elaboration report. A generate
+statement is shown once at its source location; actual replication, condition
+selection and generic evaluation belong to GHDL. Recursive/missing/ambiguous
+references are annotated and expansion is bounded. Selecting an entity for a
+component circuit uses that entity's defaults or a saved target's overrides;
+it does not infer its parent's effective generic values.
 
-`CodeEditor` uses QPlainTextEdit for text, selections and undo/redo, with a custom gutter and QSyntaxHighlighter. Highlighting recognizes case-insensitive VHDL keywords, common types, numbers, quoted literals, line comments, extended identifiers and multiline block comments. It is lexical styling, not a compiler or language server: there is no semantic validation, autocomplete or error reporting yet.
+## Project metadata and discovery
 
-The editor supports line numbers, current-line shading, four-space Tab insertion, indentation carried onto a new line, and find with wraparound. Standard platform shortcuts cover New, Open, Save, Save As, Undo, Redo and Find (Command on macOS, Control on Windows/Linux). Find is case-insensitive.
+Eitri discovers `.vhd` and `.vhdl` files below the opened folder. Hidden folders,
+symlinked source files, `.git`, `.venv`, `venv`, `node_modules`, `build`, `dist`,
+`runs`, `analysis-cache` and `.eitri` are excluded. Build outputs normally live
+in the application cache outside the project.
 
-UTF-8 files are saved through QSaveFile so an incomplete write does not replace the original. Unsaved edits prompt Save / Discard / Cancel when closing, opening another file, or creating a new file. Line endings normalize to LF. Settings are not yet persisted between launches.
+An optional `.eitri.json` stores the language standard, named targets, generic
+overrides, stop times, waveform format, checked signal names, selected targets
+and last edited file. It is portable and can be committed with source code.
+Relative source paths are used in targets. For custom libraries/exclusions:
 
-Simulation and Circuit run the packaged tools in background processes. See [TOOLS.md](TOOLS.md) for controls, artifacts, supported inputs, and preview limits.
+```json
+{
+  "version": 1,
+  "standard": "VHDL 2008",
+  "exclude": ["vendor/unused/*"],
+  "libraries": {"common": ["shared/*.vhd", "shared/*.vhdl"]},
+  "targets": []
+}
+```
 
-## Implementation
+Unmapped files use `work`. Reopen the folder after manually changing project
+metadata. Automatic ordering supports entity/architecture dependencies,
+component/direct entity instances, package imports and package bodies. Ambiguous
+architectures require an explicit choice. Explicit VHDL configurations,
+context-declaration dependency expansion, extended identifiers and complex
+binding specifications are not fully indexed; GHDL remains authoritative for
+semantic validation. Dependencies must be within the opened project tree.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the module map and common changes.
-The window composes independent toolbar, sidebar and code-page widgets. File
-operations live in `documents.py`; editor behavior and syntax rules are separated
-into `editor.py` and `highlighting.py`.
-
-Official Qt reference: https://doc.qt.io/qtforpython-6/examples/example_widgets_richtext_syntaxhighlighter.html
-
-Run headless UI tests with `QT_QPA_PLATFORM=offscreen python -m pytest tests/test_ui.py -q`. The test module also defaults to the offscreen platform when no platform was explicitly set.
-
-The Norse-inspired wordmark uses system fonts; no font download is required. The editor and regular controls retain readable fonts.
+The index is tolerant while editing and is not a second VHDL compiler. A target
+build includes its reachable files; unrelated unfinished components need not
+block it. Dependency cycles and missing bindings receive actionable errors.
+For inseparable design units with file-level dependency cycles, split the units
+into separate files.

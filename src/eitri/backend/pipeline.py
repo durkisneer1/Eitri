@@ -25,11 +25,15 @@ def validate(request):
     name = request['testbench'] if request['kind'] == 'simulation' else request['entity']
     if not IDENTIFIER.fullmatch(name):
         raise ValueError('Enter a basic VHDL entity name (letters, digits and single underscores).')
+    if 'sources' in request:
+        from .project_pipeline import validate_project_request
+        validate_project_request(request)
+        return
     if not request['design'].strip():
-        raise ValueError('The Design tab is empty.')
+        raise ValueError('The design source is empty.')
     if request['kind'] == 'simulation':
         if not request['bench'].strip():
-            raise ValueError('The Testbench tab is empty.')
+            raise ValueError('The testbench source is empty.')
         if not DURATION.fullmatch(request['stop_time']):
             raise ValueError('Stop time must be a positive integer and unit, for example 200ns or 1us.')
         if request['wave_format'] not in ('VCD', 'GHW'):
@@ -46,6 +50,9 @@ def run_pipeline(request, directory, log=print):
     from .schematic_theme import write_skin, color_schematic
 
     validate(request)
+    if 'sources' in request:
+        from .project_pipeline import run_project_pipeline
+        return run_project_pipeline(request, directory, log)
     directory = Path(directory).resolve()
     directory.mkdir(parents=True, exist_ok=True)
     (directory / 'design.vhd').write_text(request['design'], encoding='utf-8')
@@ -98,6 +105,14 @@ def run_pipeline(request, directory, log=print):
     if lowered.stderr:
         log(lowered.stderr)
     (directory / 'design.v').write_text(lowered.stdout, encoding='utf-8')
+    return render_circuit(request, directory, log)
+
+def render_circuit(request, directory, log):
+    import yosys
+    import netlistsvg
+    from .schematic import display_netlist, inline_svg_styles
+    from .schematic_theme import write_skin, color_schematic
+
     # -auto-top avoids case differences between VHDL names and emitted Verilog.
     # Simple retains inferred memories and component boundaries. Detailed
     # expands both, keeping register enables as explicit muxes so the stock
@@ -105,9 +120,19 @@ def run_pipeline(request, directory, log=print):
     detail = request.get('circuit_detail', 'Detailed')
     passes = ('proc; opt; memory -nomap; opt; clean; ' if detail == 'Simple'
               else 'proc; flatten -noscopeinfo; opt -nodffe -nosdff; memory_map; opt -nodffe -nosdff; clean; ')
+    expansions = request.get('expand_instances', [])
+    for name in expansions:
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_.]*', name):
+            raise ValueError('Unsupported instance name for selective circuit expansion.')
+    # Restrict expansion to named cells of the top module, leaving siblings boxed.
+    expand = ''.join(f'flatten -noscopeinfo A:top=1/c:{name}; ' for name in expansions)
     script = ('read_verilog design.v; hierarchy -check -auto-top; '
-              + passes + 'stat; write_json netlist.json')
-    invoke('Build Yosys netlist', yosys.run_script, script, cwd=directory, timeout=180)
+              + passes + expand + 'clean; stat; write_json netlist.json')
+    log('\n=== Build Yosys netlist ===')
+    result = yosys.run_script(script, cwd=directory, timeout=180)
+    log(result.stdout)
+    if result.stderr:
+        log(result.stderr)
     log('\n=== Render schematic ===')
     netlist = json.loads((directory / 'netlist.json').read_text())
     modules = netlist['modules']
@@ -121,7 +146,9 @@ def run_pipeline(request, directory, log=print):
     color_schematic(directory / 'schematic.svg')
     module = modules[top]
     return {'kind': 'circuit', 'svg': 'schematic.svg', 'top': top,
-            'detail': detail, 'cells': len(display['modules'][top].get('cells', {})), 'ports': len(module.get('ports', {}))}
+            'detail': detail, 'cells': len(display['modules'][top].get('cells', {})), 'ports': len(module.get('ports', {})),
+            'components': [name for name, cell in module.get('cells', {}).items() if cell['type'] in modules],
+            'expanded_instances': expansions}
 
 
 def main():

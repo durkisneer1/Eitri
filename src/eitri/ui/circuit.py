@@ -1,9 +1,9 @@
 """Vector schematic viewer with pan/zoom and export controls."""
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtSvgWidgets import QGraphicsSvgItem
-from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QHBoxLayout, QPushButton
+from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QHBoxLayout, QPushButton, QComboBox
 from .job_page import JobPage
 from .fonts import monospace_family
 from eitri.backend.schematic_theme import CANVAS
@@ -76,6 +76,9 @@ class SchematicView(QGraphicsView):
 
 
 class CircuitPage(JobPage):
+    expand_requested = Signal(str)
+    collapse_requested = Signal()
+
     def __init__(self, parent=None):
         super().__init__('Generate circuit', parent)
         self.svg_file = None
@@ -87,6 +90,18 @@ class CircuitPage(JobPage):
             item.clicked.connect(callback)
             tools.addWidget(item)
         tools.addStretch()
+        self.components = QComboBox()
+        self.components.setToolTip('Choose a component to expand inside this circuit')
+        self.components.setMinimumContentsLength(10)
+        self.components.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        tools.addWidget(self.components)
+        self.expand_button = QPushButton('Expand')
+        self.expand_button.setEnabled(False)
+        self.expand_button.clicked.connect(lambda: self.expand_requested.emit(self.components.currentText()))
+        tools.addWidget(self.expand_button)
+        self.collapse_button = QPushButton('Collapse all')
+        self.collapse_button.clicked.connect(self.collapse_requested.emit)
+        tools.addWidget(self.collapse_button)
         self.save_svg = QPushButton('Export SVG…')
         self.save_svg.setEnabled(False)
         self.save_svg.clicked.connect(self.export_svg)
@@ -100,6 +115,9 @@ class CircuitPage(JobPage):
         self.svg_file = path
         self.save_svg.setEnabled(True)
         self.has_result = True
+        self.components.clear()
+        self.components.addItems(result.get('components', []))
+        self.expand_button.setEnabled(self.components.count() > 0)
         self.status.setText(f'{result["top"]} · {result.get("detail", "Detailed")} · {result["cells"]} cells · {result["ports"]} ports. Drag or scroll to pan; pinch or use +/− to zoom.')
 
     def export_svg(self):

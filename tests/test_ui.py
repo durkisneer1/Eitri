@@ -15,8 +15,9 @@ def app():
 
 
 @pytest.fixture
-def window(app):
-    widget = Workspace()
+def window(app, tmp_path):
+    widget = Workspace(run_root=tmp_path / 'runs')
+    widget.open_folder(tmp_path)
     yield widget
     for editor in widget.code_page.editors:
         editor.document().setModified(False)
@@ -27,14 +28,14 @@ def window(app):
 
 def test_mode_switch_keeps_editor_and_parameters(window):
     window.editor.setPlainText('entity demo is end;')
-    window.sidebar.testbench.setText('demo_tb')
-    for index in (1, 2, 0):
+    window.sidebar.stop_time.setText('500ns')
+    for index in (1, 2, 3, 0):
         window.switch_mode(index)
         assert window.views.currentIndex() == index
         assert window.sidebar.options.currentIndex() == index
         assert window.toolbar.mode_buttons.checkedId() == index
     assert window.editor.toPlainText() == 'entity demo is end;'
-    assert window.sidebar.testbench.text() == 'demo_tb'
+    assert window.sidebar.stop_time.text() == '500ns'
 
 
 def test_save_roundtrip_and_undo_dirty_state(window, tmp_path):
@@ -53,11 +54,14 @@ def test_save_roundtrip_and_undo_dirty_state(window, tmp_path):
 
 
 def test_cancel_and_failed_save_preserve_document(window, monkeypatch):
+    from eitri.ui.design_dialog import NewDesignDialog
+    from PySide6.QtWidgets import QDialog
     window.editor.insertPlainText('-- unsaved\n')
     before = window.editor.toPlainText()
-    monkeypatch.setattr(QMessageBox, 'warning', lambda *a: QMessageBox.StandardButton.Cancel)
+    monkeypatch.setattr(NewDesignDialog, 'exec', lambda self: QDialog.DialogCode.Rejected)
     window.new_file()
     assert window.editor.toPlainText() == before
+    monkeypatch.setattr(QMessageBox, 'warning', lambda *a: QMessageBox.StandardButton.Cancel)
     assert not window.close()
     monkeypatch.setattr(QMessageBox, 'warning', lambda *a: QMessageBox.StandardButton.Save)
     monkeypatch.setattr(window, 'save', lambda: False)
@@ -111,7 +115,7 @@ def test_tabs_keep_independent_paths_undo_and_cursor(window, tmp_path):
     window.editor.moveCursor(QTextCursor.MoveOperation.End)
     window.editor.insertPlainText('\n-- design edit')
     design_cursor = window.editor.textCursor().position()
-    window.code_page.code_tabs.setCurrentIndex(1)
+    window.documents.add()
     assert window.path is None
     assert window.editor.toPlainText() == ''
     window.editor.setPlainText('entity bench is end;')
@@ -124,7 +128,7 @@ def test_tabs_keep_independent_paths_undo_and_cursor(window, tmp_path):
     assert window.path == design
     assert window.editor.document().isModified()
     assert window.editor.textCursor().position() == design_cursor
-    assert window.code_page.code_tabs.tabText(0).endswith(' •')
+    assert window.code_page.document_name.text().endswith(' •')
     window.editor.undo()
     assert window.editor.toPlainText() == 'entity design is end;'
     window.code_page.code_tabs.setCurrentIndex(1)
@@ -134,7 +138,8 @@ def test_tabs_keep_independent_paths_undo_and_cursor(window, tmp_path):
 
 def test_close_checks_both_tabs_and_cancel_keeps_edits(window, monkeypatch):
     window.code_page.editors[0].insertPlainText('-- edited design\n')
-    window.code_page.editors[1].insertPlainText('-- edited testbench\n')
+    window.documents.add()
+    window.editor.insertPlainText('-- edited testbench\n')
     choices = iter([QMessageBox.StandardButton.Discard, QMessageBox.StandardButton.Cancel])
     monkeypatch.setattr(QMessageBox, 'warning', lambda *args: next(choices))
     assert not window.close()
@@ -146,7 +151,7 @@ def test_cannot_overwrite_other_tabs_file(window, tmp_path, monkeypatch):
     path = tmp_path / 'design.vhd'
     assert window.write(path)
     original = path.read_text()
-    window.code_page.code_tabs.setCurrentIndex(1)
+    window.documents.add()
     window.editor.insertPlainText('-- testbench')
     monkeypatch.setattr(QMessageBox, 'warning', lambda *args: QMessageBox.StandardButton.Ok)
     assert not window.write(path)
@@ -196,20 +201,18 @@ def test_toolbar_signals_and_find_menu(window):
     assert not window.code_page.find_bar.isHidden()
 
 
-def test_explicit_testbench_open_preserves_design(window, tmp_path, monkeypatch):
+def test_open_another_source_preserves_current_document(window, tmp_path, monkeypatch):
     from PySide6.QtWidgets import QFileDialog
-    design = window.code_page.editors[0]
+    design = window.editor
     design.setPlainText('-- design remains')
     target = tmp_path / 'sample_TB.vhd'
     target.write_text('-- opened testbench')
     monkeypatch.setattr(QFileDialog, 'getOpenFileName', lambda *args: (str(target), ''))
-    window.sidebar.open_testbench_requested.emit()
+    window.open_file()
     assert design.toPlainText() == '-- design remains'
-    assert window.code_page.code_tabs.currentIndex() == 1
-    assert window.paths[1] == target
-    assert window.sidebar.save_button.text() == 'Save testbench'
-    window.code_page.code_tabs.setCurrentIndex(0)
-    assert window.sidebar.save_button.text() == 'Save design'
+    assert window.path == target
+    window.code_page.code_tabs.setCurrentWidget(design)
+    assert window.editor is design
 
 
 def test_centered_icon_navigation(window, app):
@@ -218,8 +221,8 @@ def test_centered_icon_navigation(window, app):
     window.show()
     app.processEvents()
     buttons = window.toolbar.mode_buttons.buttons()
-    assert len(window.toolbar.findChildren(QPushButton)) == 3
-    for item, title in zip(buttons, ('Code', 'Simulation', 'Circuit')):
+    assert len(window.toolbar.findChildren(QPushButton)) == 4
+    for item, title in zip(buttons, ('Code', 'Simulation', 'Circuit', 'Component hierarchy')):
         assert not item.text()
         assert not item.icon().isNull()
         assert item.toolTip() == title
@@ -233,3 +236,51 @@ def test_centered_icon_navigation(window, app):
     assert window.views.y() == 0
     assert window.views.height() == window.splitter.height()
     assert window.toolbar.width() == window.left_column.width()
+
+
+def test_short_sidebar_scrolls_without_squashing_controls(window, app):
+    window.resize(900, 420)
+    window.show()
+    for mode in range(4):
+        window.switch_mode(mode)
+        app.processEvents()
+        sidebar = window.sidebar
+        assert sidebar.verticalScrollBar().maximum() > 0
+        assert sidebar.standard.height() >= sidebar.standard.sizeHint().height()
+        if mode == 1:
+            for control in (sidebar.stop_time, sidebar.wave_format, sidebar.targets['simulation']):
+                assert control.height() >= control.sizeHint().height()
+            sidebar.ensureWidgetVisible(sidebar.wave_format)
+            app.processEvents()
+            position = sidebar.wave_format.mapTo(sidebar.viewport(), sidebar.wave_format.rect().bottomLeft())
+            assert 0 <= position.y() < sidebar.viewport().height()
+
+
+def test_launch_is_blank_until_explicit_folder_selection(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+    calls = []
+    monkeypatch.setattr(QFileDialog, 'getExistingDirectory', lambda *args: calls.append(args) or '')
+    widget = Workspace(run_root=tmp_path / 'runs')
+    widget.show()
+    app.processEvents()
+    assert not calls
+    assert widget.project is None
+    assert widget.path is None
+    assert widget.editor.toPlainText() == ''
+    assert not widget.choose_folder()
+    assert len(calls) == 1
+    assert widget.project is None
+    widget.close()
+
+
+def test_macos_folder_selection_uses_directory_picker(window, tmp_path, monkeypatch):
+    import eitri.ui.window as module
+    from PySide6.QtWidgets import QFileDialog
+    monkeypatch.setattr(module.sys, 'platform', 'darwin')
+    calls = []
+    monkeypatch.setattr(QFileDialog, 'getExistingDirectory', lambda *args: calls.append(args) or str(tmp_path))
+    assert window.choose_folder()
+    options = calls[0][3]
+    assert options & QFileDialog.Option.ShowDirsOnly
+    assert options & QFileDialog.Option.DontUseNativeDialog
+    assert window.project.root == tmp_path

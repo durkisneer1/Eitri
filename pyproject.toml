@@ -7,6 +7,13 @@ name = "eitri-hdl"
 version = "0.1.0"
 description = "A VHDL workspace for editing, simulation, and circuit visualization"
 requires-python = ">=3.11"
+classifiers = [
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
+]
 readme = "README.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
@@ -15,7 +22,7 @@ dependencies = [
   "pyTooling[terminal]~=8.12",
   "pyVHDLModel~=0.33",
   "yowasp-yosys==0.70.0.0.post1259",
-  "pyosys==0.70; sys_platform != 'win32'",
+  "pyosys==0.70; sys_platform != 'win32' and python_version < '3.15'",
   "nodejs-wheel-binaries==24.19.0",
 ]
 

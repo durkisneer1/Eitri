@@ -2,7 +2,7 @@
 
 Publish only **eitri-hdl**. It includes `eitri`, `ghdl`, `pyGHDL`, `yosys`,
 `netlistsvg`, and `gtkwave`. Public upstream packages supply Qt, YoWASP Yosys,
-pyosys (outside Windows), Node, pyTooling, and pyVHDLModel. GTKWave's external
+pyosys (outside Windows on Python 3.11–3.14), Node, pyTooling, and pyVHDLModel. GTKWave's external
 native viewer is optional and remains separately installed.
 
 ## Build
@@ -26,7 +26,7 @@ Do not upload a source distribution: this release requires prebuilt native code.
 
 The GHDL workflow uploads final `eitri-hdl-*` artifacts after clean installation
 and tests on each platform. The clean-install matrix covers Python 3.11, 3.12,
-3.13, and 3.14 on Windows x64, Linux x64, and macOS ARM64. Wait for all twelve
+3.13, 3.14, and 3.15 on Windows x64, Linux x64, and macOS ARM64. Wait for all fifteen
 jobs to pass; artifact uploads occur in the Python 3.14 jobs and do not by
 themselves prove the other versions passed. Download those wheel artifacts into `release/` for
 a multiplatform release. The locally built macOS wheel supports only macOS 26+

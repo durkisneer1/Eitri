@@ -64,7 +64,7 @@ class Entity:
     generics: list[Generic] = field(default_factory=list)
 
 
-def validate_entity(entity):
+def validate_entity(entity, allow_custom_types=False):
     validate_name(entity.name, 'Entity')
     names = set()
     for item in [*entity.generics, *entity.ports]:
@@ -75,7 +75,7 @@ def validate_entity(entity):
     for port in entity.ports:
         if port.direction not in ('in', 'out', 'inout', 'buffer'):
             raise ValueError(f'Unsupported port direction for {port.name}.')
-        if not re.fullmatch(r'STD_LOGIC(?:_VECTOR\s*\(.+\))?', port.data_type, re.I):
+        if not allow_custom_types and not re.fullmatch(r'STD_LOGIC(?:_VECTOR\s*\(.+\))?', port.data_type, re.I):
             raise ValueError(f'{port.name}: only STD_LOGIC and constrained STD_LOGIC_VECTOR are supported.')
 
 
@@ -135,14 +135,14 @@ def entity_names(source):
     return re.findall(r'\bentity\s+([A-Za-z][A-Za-z0-9_]*)\s+is\b', without_comments(source), re.I)
 
 
-def parse_entity(source, name=None):
+def parse_entity(source, name=None, allow_custom_types=False):
     text = without_comments(source)
     names = entity_names(text)
     if not names:
-        raise ValueError('No entity declaration was found in the Design tab.')
+        raise ValueError('No entity declaration was found in the current source.')
     chosen = next((item for item in names if name and item.lower() == name.lower()), names[0])
     if name and chosen.lower() != name.lower():
-        raise ValueError(f'Entity {name} was not found in the Design tab.')
+        raise ValueError(f'Entity {name} was not found in the current source.')
     start = re.search(r'\bentity\s+' + re.escape(chosen) + r'\s+is\b', text, re.I).end()
     ending = re.search(r'\bend\s*(?:entity\s*)?(?:' + re.escape(chosen) + r'\s*)?;', text[start:], re.I)
     if not ending:
@@ -157,7 +157,8 @@ def parse_entity(source, name=None):
             generics.append(Generic(generic_name.strip(), match[2], match[3].strip()))
     for declaration in split_declarations(clause(body, 'port')):
         declaration = declaration.split(':=', 1)[0].strip()
-        match = re.fullmatch(r'\s*(?:signal\s+)?([\w,\s]+)\s*:\s*(?:(inout|buffer|in|out)\s+)?(STD_LOGIC(?:_VECTOR\s*\(.+\))?)(?:\s*:=\s*.+)?', declaration, re.I | re.S)
+        type_pattern = r'(.+)' if allow_custom_types else r'(STD_LOGIC(?:_VECTOR\s*\(.+\))?)'
+        match = re.fullmatch(r'\s*(?:signal\s+)?([\w,\s]+)\s*:\s*(?:(inout|buffer|in|out)\s+)?' + type_pattern, declaration, re.I | re.S)
         if not match:
             raise ValueError('Testbench generation supports STD_LOGIC and constrained STD_LOGIC_VECTOR ports. Check the entity declaration.')
         data_type = re.sub(r'\s+', ' ', match[3]).strip()
@@ -166,5 +167,5 @@ def parse_entity(source, name=None):
         for port_name in match[1].split(','):
             ports.append(Port(port_name.strip(), (match[2] or 'in').lower(), data_type))
     entity = Entity(chosen, ports, generics)
-    validate_entity(entity)
+    validate_entity(entity, allow_custom_types=allow_custom_types)
     return entity

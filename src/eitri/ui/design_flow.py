@@ -1,153 +1,122 @@
-"""Onboarding and source creation; commit editor changes only after safe writes."""
+"""Source generation inside a folder project, without replacing other buffers."""
 from pathlib import Path
 from PySide6.QtWidgets import QDialog, QFileDialog, QInputDialog, QMessageBox
-from eitri.backend.dependencies import add_references
-from eitri.backend.vhdl import entity_names, parse_entity
-from .design_dialog import NewDesignDialog, WelcomeDialog
-from .components_dialog import ComponentsDialog
+from eitri.backend.vhdl import parse_entity, entity_names
+from .design_dialog import NewDesignDialog
 from .templates import design_template, testbench_template, testbench_path
 
-VHDL_FILTER = 'VHDL files (*.vhd *.vhdl);;All files (*)'
+VHDL_FILTER = 'VHDL files (*.vhd *.vhdl)'
 
 
 class DesignFlow:
     def __init__(self, window):
         self.window = window
 
-    def startup(self):
-        # Cancellation of a child file dialog returns to the initial choice.
-        # Cancel on the welcome dialog leaves an empty, usable workspace.
-        while True:
-            dialog = WelcomeDialog(self.window)
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                return
-            if (self.new_design() if dialog.choice == 'new' else self.open_design()):
-                return
-
-    def confirm_all(self):
-        tabs = self.window.code_page.code_tabs
-        original = tabs.currentIndex()
-        for index in range(2):
-            tabs.setCurrentIndex(index)
-            if not self.window.confirm_discard():
-                return False
-        tabs.setCurrentIndex(original)
-        return True
-
-    def install_design(self, path, text):
-        """Replace the design and detach the prior testbench as one UI operation."""
-        window = self.window
-        window.paths = [path, None]
-        window.code_page.code_tabs.setCurrentIndex(0)
-        window.code_page.editors[0].setPlainText(text)
-        window.code_page.editors[1].clear()
-        for editor in window.code_page.editors:
-            editor.document().setModified(False)
-        names = entity_names(text)
-        window.sidebar.entity.setText(names[0] if names else '')
-        window.sidebar.testbench.setText(names[0] + '_TB' if names else '')
-        window.update_title()
-        window.switch_mode(0)
-        window.editor.setFocus()
-        window.statusBar().showMessage(f'Opened {path.name}. Create a testbench from the Design tab.', 6000)
-
     def new_design(self):
-        if not self.confirm_all():
+        if not self.window.project and not self.window.choose_folder():
             return False
         dialog = NewDesignDialog(self.window)
-        while True:
-            if dialog.exec() != QDialog.DialogCode.Accepted:
-                return False
-            entity = dialog.entity
-            components_dialog = ComponentsDialog(entity, self.window)
-            if components_dialog.exec() == QDialog.DialogCode.Accepted:
-                break
-        filename, _ = QFileDialog.getSaveFileName(self.window, 'Save new design', entity.name + '.vhd', VHDL_FILTER)
-        if not filename:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return False
-        path = self.with_extension(Path(filename))
-        if path is None:
-            return False
-        if any(item.path.resolve() == path.resolve() for item in components_dialog.components):
-            QMessageBox.warning(self.window, 'Component source conflict', 'Save the parent design to a different file from its component sources.')
-            return False
-        text = design_template(entity, components_dialog.components)
-        text = add_references(text, [item.path for item in components_dialog.components], path)
-        if not self.window.documents.write_text(path, text):
-            return False
-        self.install_design(path, text)
-        return True
-
-    def open_design(self):
-        if not self.confirm_all():
-            return False
-        filename, _ = QFileDialog.getOpenFileName(self.window, 'Open VHDL design', '', VHDL_FILTER)
+        filename, _ = QFileDialog.getSaveFileName(self.window, 'Save new design', str(self.window.project.root / (dialog.entity.name + '.vhd')), VHDL_FILTER)
         if not filename:
             return False
         path = Path(filename)
-        try:
-            text = path.read_text(encoding='utf-8')
-        except (OSError, UnicodeError) as error:
-            QMessageBox.critical(self.window, 'Could not open design', str(error))
-            return False
-        self.install_design(path, text)
-        return True
-
-    def with_extension(self, path):
         if not path.suffix:
             path = path.with_suffix('.vhd')
-            # The native dialog checked the entered name, not this amended one.
-            if path.exists() and QMessageBox.question(self.window, 'Replace file?', f'Replace {path.name}?',
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+        if not self.write_generated(path, design_template(dialog.entity)):
+            return False
+        return self.window.load(path)
+
+    def choose_entity(self, source):
+        names = entity_names(source)
+        if not names:
+            raise ValueError('No entity declaration found in this file.')
+        name = names[0]
+        if len(names) > 1:
+            name, accepted = QInputDialog.getItem(self.window, 'Choose entity', 'Entity', names, 0, False)
+            if not accepted:
                 return None
-        return path
+        return parse_entity(source, name, allow_custom_types=True)
+
+    def write_generated(self, path, text):
+        path = Path(path).resolve()
+        opened = next((d for d in self.window.documents.records if d.path == path), None)
+        if opened and opened.editor.document().isModified():
+            QMessageBox.warning(self.window, 'Unsaved destination', 'Save or close the destination buffer before replacing it.')
+            return False
+        if path.exists() and QMessageBox.question(self.window, 'Replace generated file?', f'Replace {path.name}?',
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return False
+        if not self.window.documents.write_text(path, text):
+            return False
+        if opened:
+            opened.editor.setPlainText(text)
+            opened.editor.document().setModified(False)
+            opened.disk_text = text
+        self.window.refresh_project()
+        return True
 
     def create_testbench(self):
-        window = self.window
-        source = window.code_page.editors[0].toPlainText()
-        names = entity_names(source)
-        selected = window.sidebar.entity.text().strip()
+        if not self.window.editor:
+            return False
         try:
-            if len(names) > 1:
-                initial = next((index for index, name in enumerate(names) if name.lower() == selected.lower()), 0)
-                selected, accepted = QInputDialog.getItem(window, 'Choose entity', 'Entity to instantiate', names, initial, False)
-                if not accepted:
-                    return False
-            else:
-                selected = names[0] if names else None
-            entity = parse_entity(source, selected)
-            text = testbench_template(entity)
-        except ValueError as error:
-            QMessageBox.warning(window, 'Cannot create testbench', str(error))
-            return False
-
-        # A design must have a filename before its sibling _TB filename is known.
-        window.code_page.code_tabs.setCurrentIndex(0)
-        if window.paths[0] is None and not window.save_as():
-            return False
-        target = testbench_path(window.paths[0])
-        if target.resolve() == window.paths[0].resolve():
-            QMessageBox.warning(window, 'Cannot create testbench', 'The testbench path resolves to the design file. Choose a different design filename.')
-            return False
-        window.code_page.code_tabs.setCurrentIndex(1)
-        if not window.confirm_discard():
-            return False
-        if target.exists():
-            choice = QMessageBox.question(window, 'Replace existing testbench?',
-                f'{target.name} already exists. Replace it with a new generated template?',
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No)
-            if choice != QMessageBox.StandardButton.Yes:
+            entity = self.choose_entity(self.window.editor.toPlainText())
+            if entity is None:
                 return False
-        if not window.documents.write_text(target, text):
+            import re
+            from eitri.backend.project import masked
+            source = masked(self.window.editor.toPlainText())
+            context = '\n'.join(dict.fromkeys(re.findall(r'\b(?:library|use|context)\s+[^;]+;', source, re.I)))
+            text = testbench_template(entity, context=(context + '\n') if context else None, allow_custom_types=True)
+        except ValueError as error:
+            QMessageBox.warning(self.window, 'Cannot create testbench', str(error))
             return False
-        window.paths[1] = target
-        window.code_page.editors[1].setPlainText(text)
-        window.code_page.editors[1].document().setModified(False)
-        window.sidebar.entity.setText(entity.name)
-        window.sidebar.testbench.setText(entity.name + '_TB')
-        window.update_title()
-        window.switch_mode(0)
-        window.statusBar().showMessage(f'Created {target.name}. Add stimulus in the testbench process.', 7000)
+        if self.window.path is None and not self.window.save_as():
+            return False
+        proposed = testbench_path(self.window.path)
+        filename, _ = QFileDialog.getSaveFileName(self.window, 'Save testbench', str(proposed), VHDL_FILTER)
+        if not filename:
+            return False
+        path = Path(filename)
+        if not path.suffix:
+            path = path.with_suffix('.vhd')
+        if path.resolve() == self.window.path:
+            QMessageBox.warning(self.window, 'Choose another file', 'A testbench cannot replace its design source.')
+            return False
+        if not self.write_generated(path, text):
+            return False
+        self.window.load(path)
+        self.window.select_file_target('simulation', path, run=False)
         return True
+
+    def insert_instance(self, path=None):
+        window = self.window
+        if not window.project or not window.editor or window.editor.isReadOnly():
+            return
+        window.refresh_project()
+        choices = [u for u in window.project.entities if path is None or Path(u.path) == Path(path)]
+        if not choices:
+            return
+        labels = [f'{u.library}.{u.name} — {window.project.relative(u.path)}' for u in choices]
+        label, accepted = QInputDialog.getItem(window, 'Insert component instance', 'Design to instantiate', labels, 0, False)
+        if not accepted:
+            return
+        unit = choices[labels.index(label)]
+        try:
+            entity = parse_entity(window.project.sources[unit.path], unit.name, allow_custom_types=True)
+        except ValueError as error:
+            QMessageBox.warning(window, 'Cannot generate port map', str(error))
+            return
+        import re
+        label = 'u_' + entity.name
+        source = window.editor.toPlainText()
+        while re.search(r'\b' + re.escape(label) + r'\s*:', source, re.I):
+            label += '_inst'
+        text = f'\n    -- Replace <...> with your connections.\n    {label} : entity {unit.library}.{entity.name}'
+        if entity.generics:
+            text += '\n        generic map (\n' + ',\n'.join(f'            {g.name} => {g.default}' for g in entity.generics) + '\n        )'
+        if entity.ports:
+            text += '\n        port map (\n' + ',\n'.join(f'            {p.name} => <{p.name}>' for p in entity.ports) + '\n        )'
+        window.editor.insertPlainText(text + ';\n')
+        window.statusBar().showMessage('Instance inserted. Replace each <...> placeholder with a signal.', 7000)

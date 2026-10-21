@@ -18,6 +18,7 @@ def app():
 @pytest.fixture
 def window(app, tmp_path):
     window = Workspace(run_root=tmp_path / 'runs')
+    window.open_folder(tmp_path)
     yield window
     for editor in window.code_page.editors:
         editor.document().setModified(False)
@@ -86,70 +87,67 @@ def test_unsupported_interface_is_explicit():
 
 def test_new_design_and_create_testbench_write_sibling_files(window, tmp_path, monkeypatch):
     target = tmp_path / 'custom filename.vhdl'
+    bench = tmp_path / 'custom filename_TB.vhdl'
     def accept_form(dialog):
         dialog.entity = sample()
         return QDialog.DialogCode.Accepted
-    from eitri.ui.components_dialog import ComponentsDialog
-    monkeypatch.setattr(ComponentsDialog, 'exec', lambda self: QDialog.DialogCode.Accepted)
     monkeypatch.setattr(NewDesignDialog, 'exec', accept_form)
-    monkeypatch.setattr(QFileDialog, 'getSaveFileName', lambda *args: (str(target), ''))
+    filenames = iter([target, bench])
+    monkeypatch.setattr(QFileDialog, 'getSaveFileName', lambda *args: (str(next(filenames)), ''))
     assert window.new_file()
     assert target.read_text() == design_template(sample())
-    assert window.paths == [target, None]
-    assert window.sidebar.entity.text() == 'adder'
-    assert window.code_page.editors[1].toPlainText() == ''
+    original = window.editor
+    assert window.path == target
     assert window.design_flow.create_testbench()
-    bench = tmp_path / 'custom filename_TB.vhdl'
-    assert window.paths[1] == bench
+    assert window.path == bench
     assert bench.read_text() == make_testbench(sample())
-    assert window.sidebar.testbench.text() == 'adder_TB'
-    assert 'component adder is' in bench.read_text()
-    assert window.code_page.code_tabs.currentIndex() == 1
+    assert original.toPlainText() == target.read_text()
+    assert window.selected_target('simulation').entity == 'adder_TB'
 
 
 def test_existing_tb_is_not_overwritten_without_confirmation(window, tmp_path, monkeypatch):
     target = tmp_path / 'adder.vhd'
     target.write_text(design_template(sample()))
-    window.design_flow.install_design(target, target.read_text())
+    window.load(target)
     bench = bench_path(target)
     bench.write_text('-- hand-written testbench')
+    monkeypatch.setattr(QFileDialog, 'getSaveFileName', lambda *args: (str(bench), ''))
     monkeypatch.setattr(QMessageBox, 'question', lambda *args: QMessageBox.StandardButton.No)
     assert not window.design_flow.create_testbench()
     assert bench.read_text() == '-- hand-written testbench'
-    assert window.paths[1] is None
+    assert window.path == target
 
 
-def test_cancel_keeps_both_documents(window, tmp_path, monkeypatch):
-    for editor in window.code_page.editors:
-        editor.insertPlainText('-- unsaved')
-    monkeypatch.setattr(QMessageBox, 'warning', lambda *args: QMessageBox.StandardButton.Cancel)
+def test_cancel_keeps_all_documents(window, tmp_path, monkeypatch):
+    window.editor.insertPlainText('-- unsaved')
+    window.documents.add(text='-- component')
+    monkeypatch.setattr(NewDesignDialog, 'exec', lambda self: QDialog.DialogCode.Rejected)
     assert not window.new_file()
-    assert not window.design_flow.open_design()
-    assert all(editor.toPlainText() == '-- unsaved' for editor in window.code_page.editors)
+    monkeypatch.setattr(QMessageBox, 'warning', lambda *args: QMessageBox.StandardButton.Cancel)
+    assert not window.open_folder(tmp_path)
+    assert [e.toPlainText() for e in window.code_page.editors] == ['-- unsaved', '-- component']
 
 
-def test_failed_generated_file_write_keeps_existing_tb(window, tmp_path, monkeypatch):
+def test_failed_generated_file_write_keeps_existing_buffers(window, tmp_path, monkeypatch):
     target = tmp_path / 'adder.vhd'
-    window.design_flow.install_design(target, design_template(sample()))
-    window.code_page.editors[1].setPlainText('-- keep this')
+    target.write_text(design_template(sample()))
+    window.documents.add(text='-- keep this')
+    window.load(target)
+    monkeypatch.setattr(QFileDialog, 'getSaveFileName', lambda *args: (str(tmp_path / 'new_tb.vhd'), ''))
     monkeypatch.setattr(window.documents, 'write_text', lambda *args: False)
     assert not window.design_flow.create_testbench()
-    assert window.code_page.editors[1].toPlainText() == '-- keep this'
-    assert window.paths[1] is None
+    assert any(e.toPlainText() == '-- keep this' for e in window.code_page.editors)
+    assert window.path == target
 
 
-def test_startup_open_updates_entity_and_clears_old_bench(window, tmp_path, monkeypatch):
+def test_explicit_open_folder_without_forcing_document_roles(window, tmp_path, monkeypatch):
     target = tmp_path / 'existing.vhd'
     target.write_text(design_template(sample()))
-    def choose_open(dialog):
-        dialog.choice = 'open'
-        return QDialog.DialogCode.Accepted
-    monkeypatch.setattr(WelcomeDialog, 'exec', choose_open)
-    monkeypatch.setattr(QFileDialog, 'getOpenFileName', lambda *args: (str(target), ''))
-    window.design_flow.startup()
-    assert window.paths[0] == target
-    assert window.sidebar.entity.text() == 'adder'
-    assert window.code_page.editors[0].toPlainText() == target.read_text()
+    monkeypatch.setattr(QFileDialog, 'getExistingDirectory', lambda *args: str(tmp_path))
+    window.choose_folder()
+    assert window.project.root == tmp_path
+    assert str(target) in window.project.sources
+    assert window.path is None
 
 
 @pytest.mark.integration
@@ -243,30 +241,19 @@ end;
     assert 'module fourbitadder' in result.stdout.lower()
 
 
-def test_new_design_tracks_component_files_and_save_as_rebases(window, tmp_path, monkeypatch):
-    from eitri.ui.components_dialog import ComponentsDialog, ComponentSource
-    from eitri.backend.dependencies import references
+def test_insert_instance_uses_project_source_and_unique_label(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog
     child_path = tmp_path / 'child.vhd'
-    child = Entity('child', [Port('a', 'in'), Port('y', 'out')])
-    child_source = design_template(child)
+    child_source = design_template(Entity('child', [Port('a', 'in'), Port('y', 'out')]))
     child_path.write_text(child_source)
     target = tmp_path / 'parent.vhd'
-    def ports_form(dialog):
-        dialog.entity = Entity('parent')
-        return QDialog.DialogCode.Accepted
-    def components_form(dialog):
-        dialog.components = [ComponentSource(child_path, child_source, child)]
-        return QDialog.DialogCode.Accepted
-    monkeypatch.setattr(NewDesignDialog, 'exec', ports_form)
-    monkeypatch.setattr(ComponentsDialog, 'exec', components_form)
-    monkeypatch.setattr(QFileDialog, 'getSaveFileName', lambda *args: (str(target), ''))
-    assert window.new_file()
-    assert references(target.read_text(), target) == [child_path]
-    assert 'entity child is' not in target.read_text()
-    assert window.tools.snapshot('circuit')['dependencies'][0]['source'] == child_source
-    destination = tmp_path / 'moved'
-    destination.mkdir()
-    assert window.write(destination / 'renamed.vhd')
-    assert references(window.editor.toPlainText(), window.path) == [child_path]
-    window.design_flow.install_design(window.path, window.path.read_text())
-    assert window.tools.snapshot('circuit')['dependencies'][0]['path'] == str(child_path)
+    target.write_text(design_template(Entity('parent')))
+    window.load(target)
+    window.refresh_project()
+    monkeypatch.setattr(QInputDialog, 'getItem', lambda parent, title, caption, items, *args: (items[0], True))
+    window.design_flow.insert_instance(child_path)
+    window.design_flow.insert_instance(child_path)
+    assert 'u_child : entity work.child' in window.editor.toPlainText()
+    assert 'u_child_inst : entity work.child' in window.editor.toPlainText()
+    assert window.editor.toPlainText().count('a => <a>') == 2
+    assert child_path.read_text() == child_source

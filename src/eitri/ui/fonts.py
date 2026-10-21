@@ -1,6 +1,6 @@
 """Resolve installed font families before handing them to Qt."""
 from PySide6.QtGui import QFontDatabase
-
+from PySide6.QtCore import QCoreApplication
 
 def installed_family(preferred, fixed=False):
     available = {name.casefold(): name for name in QFontDatabase.families()}
@@ -15,7 +15,7 @@ def monospace_family():
     return installed_family(('Menlo', 'Consolas', 'DejaVu Sans Mono', 'Liberation Mono'), fixed=True)
 
 
-def configure_application_font(app):
+def configure_application_font(app: QCoreApplication):
     # Some platform plugins return a generic alias rather than an installed font.
     font = app.font()
     font.setFamily(installed_family((font.family(), 'Segoe UI', 'Helvetica Neue', 'DejaVu Sans', 'Arial')))

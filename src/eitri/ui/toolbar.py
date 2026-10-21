@@ -11,6 +11,7 @@ PATHS = (
     '<path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18"/>',
     '<path d="M2 16h4V6h6v12h6V8h4"/>',
     '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/>',
+    '<rect x="8" y="2" width="8" height="6" rx="1"/><rect x="1" y="16" width="8" height="6" rx="1"/><rect x="15" y="16" width="8" height="6" rx="1"/><path d="M12 8v4H5v4m7-4h7v4"/>',
 )
 
 
@@ -45,14 +46,14 @@ class Toolbar(QFrame):
         nav.addStretch()
         self.mode_buttons = QButtonGroup(self)
         self.mode_buttons.setExclusive(True)
-        for index, title in enumerate(('Code', 'Simulation', 'Circuit')):
+        for index, title in enumerate(('Code', 'Simulation', 'Circuit', 'Component hierarchy')):
             item = QPushButton()
             item.setIcon(mode_icon(index))
             item.setIconSize(QSize(24, 24))
             item.setToolTip(title)
             item.setAccessibleName(title)
             item.setCheckable(True)
-            item.setFixedSize(54, 40)
+            item.setFixedSize(48, 40)
             self.mode_buttons.addButton(item, index)
             nav.addWidget(item)
         nav.addStretch()

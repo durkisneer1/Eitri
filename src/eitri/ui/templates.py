@@ -54,8 +54,8 @@ def design_template(entity: Entity, components=()):
     return '\n'.join(lines)
 
 
-def testbench_template(entity: Entity):
-    validate_entity(entity)
+def testbench_template(entity: Entity, context=None, allow_custom_types=False):
+    validate_entity(entity, allow_custom_types=allow_custom_types)
     tb_name = entity.name + '_TB'
     # Generated signal names avoid clashes with the component and generic names.
     used = {entity.name.lower(), tb_name.lower(), *(item.name.lower() for item in entity.generics)}
@@ -74,14 +74,14 @@ def testbench_template(entity: Entity):
             name += '_sig'
         used.add(name.lower())
         signals[port.name] = name
-    lines = [HEADER, f'entity {tb_name} is', f'end {tb_name};', '',
+    lines = [context or HEADER, f'entity {tb_name} is', f'end {tb_name};', '',
              f'architecture Behavioral of {tb_name} is', f'    component {entity.name} is',
              *interface_lines(entity, '        '), '    end component;', '']
     for generic in entity.generics:
         lines.append(f'    constant {generic.name} : {generic.data_type} := {generic.default};')
     for port in entity.ports:
         initial = ''
-        if port.direction == 'in':
+        if port.direction == 'in' and port.data_type.upper().startswith('STD_LOGIC'):
             initial = " := (others => '0')" if 'vector' in port.data_type.lower() else " := '0'"
         lines.append(f'    signal {signals[port.name]} : {port.data_type}{initial};')
     lines += ['begin', f'    {uut_label} : {entity.name}']

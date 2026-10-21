@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "standard": "VHDL 2008",
+  "exclude": [],
+  "libraries": {},
+  "targets": [],
+  "selected_simulation": "cpu_tb",
+  "selected_circuit": "cpu",
+  "active_file": "rtl/cpu.vhd"
+}

@@ -13,7 +13,7 @@ All paths in this table are relative to `src/eitri/ui/`.
 | Overall layout, view switching, status bar, signal connections | `window.py` |
 | Wordmark, top buttons, mode selection | `toolbar.py` |
 | Options and parameters on the left | `sidebar.py` |
-| Design/Testbench tabs and Find | `code_page.py` |
+| Visible document editor and Find | `code_page.py` |
 | Open, save, overwrite protection, unsaved-edit dialogs | `documents.py` |
 | Text input, indentation, line numbers, current-line shading | `editor.py` |
 | VHDL keywords, tokens and syntax colors | `highlighting.py` |
@@ -22,7 +22,12 @@ All paths in this table are relative to `src/eitri/ui/`.
 | Preferred window dimensions and screen limits | `sizing.py` |
 | Minimal design and testbench generators | `templates.py` |
 | Startup, new-design form and generation workflow | `design_dialog.py`, `components_dialog.py`, `design_flow.py` |
-| Source references and recursive dependency snapshots | `backend/dependencies.py` |
+| Folder indexing, library bindings, target snapshots | `backend/project.py` |
+| Cached project analysis and source-mapped diagnostics | `backend/project_pipeline.py` |
+| Legacy source-reference utilities | `backend/dependencies.py` |
+| Language server transport, mirrors and diagnostics | `language_server.py` |
+| Interactive component hierarchy and SVG export | `hierarchy.py` |
+| Named targets and generic override form | `target_dialog.py` |
 | Entity/port parsing and validation | `backend/vhdl.py` |
 | Simulation signal list and controls | `simulation.py` |
 | Digital waveform painting, zoom and cursor | `waveform.py` |
@@ -35,15 +40,16 @@ All paths in this table are relative to `src/eitri/ui/`.
 ## How the pieces communicate
 
 Widgets own their layouts. They emit signals when an action belongs to the
-application: for example, `Toolbar.open_requested` connects to
-`Workspace.open_file`, which delegates to `DocumentController.open_file`.
-The controller opens a native dialog and loads the selected file into the active
-editor. It receives the window explicitly; there are no global widget variables.
+application: for example, `Sidebar.open_folder_requested` connects to
+`Workspace.choose_folder`, which creates a `Project` index.
+The document controller creates or restores a buffer when a file is selected. It receives the window explicitly; there are no global widget variables.
 
 `Workspace.editor` and `Workspace.path` refer to the selected document.
-`CodePage.editors` contains the two separate editor widgets, so undo history,
-cursor position and unsaved text survive tab switches. `Workspace.paths` stores
-their corresponding disk paths. File operations must preserve this separation.
+`DocumentController.records` owns a buffer per opened path, so undo history,
+cursor position and unsaved text survive file switches. Only one editor is
+visible. `Project.sources` combines disk sources with these buffer overrides;
+LSP, hierarchy and run snapshots share this view. `Target` objects select an
+entity/library/architecture independently of the active editor.
 
 To add a sidebar setting, create the control in `Sidebar` and keep a named
 attribute on it, like `self.stop_time`. The application can read it through

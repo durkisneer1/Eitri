@@ -32,10 +32,11 @@ def wait_until(app, condition, seconds=60):
 def workspace(app, tmp_path):
     window = Workspace(run_root=tmp_path / 'runs')
     fixtures = Path(__file__).parent / 'fixtures'
-    window.code_page.editors[0].setPlainText((fixtures / 'ROM_16x32.vhd').read_text())
-    window.code_page.editors[1].setPlainText((fixtures / 'ROM_16x32_TB.vhd').read_text())
-    window.sidebar.entity.setText('ROM_16x32')
-    window.sidebar.testbench.setText('ROM_16x32_TB')
+    for name in ('ROM_16x32.vhd', 'ROM_16x32_TB.vhd'):
+        (tmp_path / name).write_text((fixtures / name).read_text())
+    window.open_folder(tmp_path)
+    window.load(tmp_path / 'ROM_16x32.vhd')
+    window.load(tmp_path / 'ROM_16x32_TB.vhd')
     yield window
     for runner in window.tools.runners.values():
         runner.stop()
@@ -96,11 +97,10 @@ def test_renderer_adaptation_preserves_original_and_styles(tmp_path):
 
 
 def test_invalid_settings_dont_spawn_process(workspace):
-    workspace.sidebar.testbench.setText('bad; injected')
+    workspace.sidebar.stop_time.setText('bad; injected')
     workspace.tools.start('simulation')
     assert not workspace.tools.running
-    assert 'entity name' in workspace.simulation_page.status.text()
-    workspace.sidebar.entity.setText('ROM_16x32')
+    assert 'Stop time' in workspace.simulation_page.status.text()
     request = workspace.tools.snapshot('circuit')
     request['entity'] = 'bad__name'
     with pytest.raises(ValueError):
@@ -129,14 +129,14 @@ def test_real_simulation_export_and_failure_preserve_previous_view(workspace, ap
     page.export_run()
     import zipfile
     with zipfile.ZipFile(target) as archive:
-        assert {'design.vhd', 'testbench.vhd', 'wave.vcd', 'wave.ghw', 'run.log'} <= set(archive.namelist())
+        assert {'source_0000.vhd', 'source_0001.vhd', 'sources.json', 'wave.vcd', 'wave.ghw', 'run.log'} <= set(archive.namelist())
     old_wave = page.wave_file
     workspace.code_page.editors[0].insertPlainText('invalid VHDL\n')
     assert 'Inputs changed' in page.status.text()
     workspace.tools.start('simulation')
     wait_until(app, lambda: not workspace.tools.running)
     assert 'Failed' in page.status.text()
-    assert 'design.vhd' in page.log.toPlainText()
+    assert 'ROM_16x32.vhd' in page.log.toPlainText()
     assert page.wave_file == old_wave
     assert page.run_button.isEnabled() and not page.stop_button.isEnabled()
 
@@ -164,7 +164,8 @@ architecture test of spin is begin
 process begin loop null; end loop; wait; end process;
 end;
 ''')
-    workspace.sidebar.testbench.setText('spin')
+    workspace.refresh_project()
+    workspace.select_file_target('simulation', workspace.documents.records[1].path, run=False)
     workspace.tools.start('simulation')
     page = workspace.simulation_page
     wait_until(app, lambda: '=== Simulate' in page.log.toPlainText())
