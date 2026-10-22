@@ -45,15 +45,28 @@ def test_unsaved_component_overlay_and_snapshot_are_independent(project):
 
 
 def test_saved_targets_and_excluded_artifacts(project):
-    target = replace(project.targets('simulation')[0], name='Adder smoke', stop_time='10ns', generics={})
+    previously_saved = [Target(**data) for data in project.config['targets']]
+    existing = project.targets('simulation')
+    adder = next(t for t in existing if t.entity == 'adder_tb')
+    target = replace(adder, name='Adder smoke', stop_time='10ns', generics={})
     project.save_target(target)
     generated = project.root / 'runs/run1'
     generated.mkdir(parents=True)
     (generated / 'duplicate.vhd').write_text('entity adder is end;')
     reopened = Project(project.root)
-    assert reopened.targets('simulation')[0].name == 'Adder smoke'
-    assert reopened.targets('simulation')[0].stop_time == '10ns'
+    targets = {t.name: t for t in reopened.targets('simulation')}
+    assert targets['Adder smoke'] == target
+    # Saving a new named configuration must preserve existing saved targets.
+    for previous in previously_saved:
+        assert targets[previous.name] == previous
+    assert str(generated / 'duplicate.vhd') not in reopened.sources
     assert not reopened.issues
+
+    # Updating the same name replaces it without accumulating duplicate targets.
+    updated = replace(target, stop_time='20ns')
+    reopened.save_target(updated)
+    saved = [t for t in Project(project.root).targets('simulation') if t.name == target.name]
+    assert saved == [updated]
 
 
 def test_ambiguity_cycle_and_missing_package_are_explicit(tmp_path):
