@@ -1,6 +1,6 @@
 # Development setup
 
-Use Python 3.11+ with compatible wheels for your platform. Build a matching
+Use Python 3.12+ with compatible wheels for your platform. Build a matching
 `ghdl-bundled` wheel using the GHDL workflow, then run from the repository root:
 
 ```sh

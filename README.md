@@ -40,7 +40,7 @@ These screenshots show my 4-bit full adder, built from four 1-bit adders.
 
 ## Running Eitri
 
-Eitri is available on [PyPI as `eitri-hdl`](https://pypi.org/project/eitri-hdl/). Supported Python versions are 3.11–3.15:
+Eitri is available on [PyPI as `eitri-hdl`](https://pypi.org/project/eitri-hdl/). Supported Python versions are 3.12–3.15:
 
 ```sh
 python -m pip install eitri-hdl
