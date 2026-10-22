@@ -54,6 +54,13 @@ eitri
 
 If you installed into a virtual environment, activate it before running `eitri`. You can also launch the app with `python -m eitri`.
 
+Both commands return your terminal prompt immediately; the app keeps running
+if you close the terminal. Use `eitri --foreground` (or `python -m eitri
+--foreground`) to keep diagnostic output in the terminal while debugging.
+Background output is saved to `~/Library/Logs/Eitri/eitri.log` on macOS,
+`%LOCALAPPDATA%/Eitri/eitri.log` on Windows, or
+`${XDG_STATE_HOME:-~/.local/state}/Eitri/eitri.log` on Linux.
+
 The app starts blank. Click **Open folder…** to choose your project.
 Python 3.15 supports the editor, simulation, and circuit generation; the optional
 direct native `yosys.libyosys()` API requires a separately available `pyosys` build.

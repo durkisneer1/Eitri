@@ -3,7 +3,26 @@
   "standard": "VHDL 2008",
   "exclude": [],
   "libraries": {},
-  "targets": [],
+  "targets": [
+    {
+      "name": "cpu_tb",
+      "kind": "simulation",
+      "entity": "cpu_tb",
+      "path": "tb/cpu_tb.vhd",
+      "library": "work",
+      "architecture": "test",
+      "generics": {},
+      "stop_time": "400ns",
+      "wave_format": "VCD",
+      "circuit_detail": "Simple",
+      "signals": [
+        "cpu_tb.clk",
+        "cpu_tb.reset",
+        "cpu_tb.result[7:0]",
+        "cpu_tb.halted"
+      ]
+    }
+  ],
   "selected_simulation": "cpu_tb",
   "selected_circuit": "cpu",
   "active_file": "rtl/cpu.vhd"

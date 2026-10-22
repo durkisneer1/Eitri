@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eitri-hdl"
-version = "0.1.0"
+version = "0.2.0"
 description = "A VHDL workspace for editing, simulation, and circuit visualization"
 requires-python = ">=3.11"
 classifiers = [
@@ -35,7 +35,7 @@ ghdl-ls = "pyGHDL.cli.lsp:main"
 ghdl-dom = "pyGHDL.cli.dom:main"
 
 [project.gui-scripts]
-eitri = "eitri.ui.window:main"
+eitri = "eitri.launcher:main"
 
 [project.urls]
 Homepage = "https://github.com/durkisneer1/Eitri"

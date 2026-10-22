@@ -1,4 +1,4 @@
-from eitri.ui.window import main
+from eitri.launcher import main
 
 if __name__ == '__main__':
     main()
