@@ -2,8 +2,8 @@
 from dataclasses import replace
 from pathlib import Path
 import sys
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QMainWindow, QMessageBox, QSplitter, QStackedWidget, QVBoxLayout, QWidget, QDialog
+from PySide6.QtCore import Qt, QTimer, QSettings
+from PySide6.QtWidgets import QApplication, QFileDialog, QInputDialog, QMainWindow, QMessageBox, QSplitter, QStackedWidget, QVBoxLayout, QWidget, QDialog, QPushButton
 from eitri.backend.project import Project
 from .actions import install_actions
 from .app_icon import application_icon
@@ -16,7 +16,7 @@ from .hierarchy import HierarchyPage
 from .tool_controller import ToolController
 from .sidebar import Sidebar
 from .sizing import fit_window
-from .theme import workspace_style
+from .theme import apply_theme, current_mode
 from .fonts import configure_application_font
 from .toolbar import Toolbar
 from .widgets import label
@@ -30,7 +30,8 @@ class Workspace(QMainWindow):
             configure_application_font(app)
             app.setWindowIcon(application_icon())
         self.setWindowIcon(application_icon())
-        self.setStyleSheet(workspace_style())
+        self.theme_settings = QSettings('Eitri', 'Eitri')
+        apply_theme(self.theme_settings.value('appearance', 'Dark'))
         self.project = None
         self.refreshing = False
         self.rendered_revision = -1
@@ -63,6 +64,11 @@ class Workspace(QMainWindow):
         self.page_name = label('Open a folder to start')
         self.position = label('')
         self.page_name.hide()
+        self.theme_toggle = QPushButton()
+        self.theme_toggle.setAccessibleName('Toggle light and dark mode')
+        self.theme_toggle.clicked.connect(self.toggle_theme)
+        self.statusBar().addWidget(self.theme_toggle)
+        self.update_theme_button()
         self.statusBar().addPermanentWidget(self.position)
         self.tools = ToolController(self, run_root)
         from .language_server import EditorAssistance
@@ -99,6 +105,28 @@ class Workspace(QMainWindow):
         install_actions(self)
         fit_window(self)
         # fit_window keeps the workspace within the available screen bounds.
+
+    def update_theme_button(self):
+        target = 'Light' if current_mode() == 'Dark' else 'Dark'
+        self.theme_toggle.setText(target + ' mode')
+        self.theme_toggle.setToolTip('Switch to ' + target.lower() + ' mode')
+
+    def toggle_theme(self):
+        from .editor import CodeEditor
+        from .toolbar import mode_icon
+        mode = 'Light' if current_mode() == 'Dark' else 'Dark'
+        apply_theme(mode)
+        self.theme_settings.setValue('appearance', mode)
+        self.update_theme_button()
+        for editor in self.findChildren(CodeEditor):
+            editor.highlighter.set_theme()
+            editor.highlight_line()
+        for index, button in enumerate(self.toolbar.mode_buttons.buttons()):
+            button.setIcon(mode_icon(index))
+        self.circuit_page.view.refresh_theme()
+        self.hierarchy_page.refresh_theme()
+        self.simulation_page.wave.viewport().update()
+        self.update()
 
     @property
     def editor(self):

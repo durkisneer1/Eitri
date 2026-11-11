@@ -63,7 +63,7 @@ class NewDesignDialog(QDialog):
         layout.addLayout(controls)
         self.error = QLabel('')
         self.error.setWordWrap(True)
-        self.error.setStyleSheet('color: #d4a093;')
+        self.error.setObjectName('error')
         layout.addWidget(self.error)
         # Validation leaves the dialog open and preserves everything entered.
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)

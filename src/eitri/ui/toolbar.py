@@ -1,4 +1,5 @@
 """Wordmark and centered, icon-only workspace navigation."""
+from .theme import theme_color
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtSvg import QSvgRenderer
@@ -18,7 +19,7 @@ PATHS = (
 def mode_icon(index):
     icon = QIcon()
     for state, color in ((QIcon.State.Off, '#dedbd5'), (QIcon.State.On, '#292620')):
-        svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="{color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">{PATHS[index]}</g></svg>'
+        svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g fill="none" stroke="{theme_color(color)}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">{PATHS[index]}</g></svg>'
         pixmap = QPixmap(48, 48)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)

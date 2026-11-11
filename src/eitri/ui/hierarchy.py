@@ -1,8 +1,9 @@
 """Interactive source hierarchy: expand instances, inspect wiring, open source."""
+from .theme import theme_color
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPen, QPainterPath, QFont
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLabel,
-    QPushButton, QSplitter, QTextBrowser, QFileDialog, QGraphicsRectItem, QGraphicsTextItem)
+    QPushButton, QSplitter, QTextBrowser, QFileDialog, QGraphicsRectItem, QGraphicsTextItem, QGraphicsPathItem)
 from .circuit import SchematicView
 
 
@@ -11,24 +12,27 @@ class ComponentCard(QGraphicsRectItem):
         super().__init__(0, 0, 248, 92)
         self.page, self.node = page, node
         self.setPos(x, y)
-        self.setBrush(QColor('#3c4a50' if not node.get('error') else '#623f38'))
-        self.setPen(QPen(QColor('#a4b2b7'), 1.4))
         self.setFlag(self.GraphicsItemFlag.ItemIsSelectable)
         self.setToolTip(node['key'] + ' : ' + node['entity'] + '\nDouble-click to expand/collapse. Select to inspect connections.')
         title = QGraphicsTextItem(node['label'], self)
-        title.setDefaultTextColor(QColor('#eee7da'))
         font = QFont()
         font.setPointSize(12)
         title.setFont(font)
         title.setPos(12, 7)
         title.setTextWidth(224)
         detail = QGraphicsTextItem(node['entity'] + ('  ▸' if node['key'] in page.collapsed else '  ▾') if node.get('children') else node['entity'], self)
-        detail.setDefaultTextColor(QColor('#c4b48e'))
         detail.setPos(12, 43)
         detail.setTextWidth(224)
         self.text_items = (title, detail)  # Keep Python-owned graphics children alive.
+        self.refresh_theme()
         for item in self.text_items:
             item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+
+    def refresh_theme(self):
+        self.setBrush(QColor(theme_color('#623f38' if self.node.get('error') else '#3c4a50')))
+        self.setPen(QPen(QColor(theme_color('#a4b2b7')), 1.4))
+        for item, color in zip(self.text_items, ('#eee7da', '#c4b48e')):
+            item.setDefaultTextColor(QColor(theme_color(color)))
 
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
@@ -92,6 +96,14 @@ class HierarchyPage(QWidget):
         split.setSizes([800, 280])
         details.hide()
         layout.addWidget(split, 1)
+
+    def refresh_theme(self):
+        self.view.refresh_theme()
+        for item in self.view.scene().items():
+            if isinstance(item, ComponentCard):
+                item.refresh_theme()
+            elif isinstance(item, QGraphicsPathItem):
+                item.setPen(QPen(QColor(theme_color('#bfa779')), 1.5))
 
     def set_project(self, project):
         self.project = project
@@ -157,7 +169,7 @@ class HierarchyPage(QWidget):
                     path.lineTo(x + 124, y + 122)
                     path.lineTo(cx, y + 122)
                     path.lineTo(cx, y + 160)
-                    edge = scene.addPath(path, QPen(QColor('#bfa779'), 1.5))
+                    edge = scene.addPath(path, QPen(QColor(theme_color('#bfa779')), 1.5))
                     edge.setZValue(-1)
                     place(child, offset, depth + 1)
                     offset += child['span']
@@ -183,7 +195,7 @@ class HierarchyPage(QWidget):
         generator.setViewBox(target)
         generator.setTitle('Eitri component hierarchy')
         with QPainter(generator) as painter:
-            painter.fillRect(target, QColor('#242423'))
+            painter.fillRect(target, QColor(theme_color('#242423')))
             self.view.scene().render(painter, target, bounds)
 
     def expand_all(self):

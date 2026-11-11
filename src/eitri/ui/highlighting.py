@@ -1,4 +1,5 @@
 """VHDL token rules and QSyntaxHighlighter implementation."""
+from .theme import theme_color
 import re
 from PySide6.QtGui import QColor, QSyntaxHighlighter, QTextCharFormat
 
@@ -17,14 +18,18 @@ TOKEN = re.compile(r'(?P<comment>--[^\n]*)|(?P<block>/\*)|(?P<string>"(?:[^"]|""
 class VhdlHighlighter(QSyntaxHighlighter):
     def __init__(self, document):
         super().__init__(document)
+        self.set_theme()
+
+    def set_theme(self):
         self.styles = {}
         for name, color in {'keyword': '#bba7c4', 'type': '#a9b9a1', 'string': '#c9bc91',
                             'number': '#c39e83', 'comment': '#928c81'}.items():
             style = QTextCharFormat()
-            style.setForeground(QColor(color))
+            style.setForeground(QColor(theme_color(color)))
             if name == 'comment':
                 style.setFontItalic(True)
             self.styles[name] = style
+        self.rehighlight()
 
     def highlightBlock(self, text):
         # Qt offsets count UTF-16 units, unlike Python's Unicode code points.

@@ -5,7 +5,9 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtSvgWidgets import QGraphicsSvgItem
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView, QHBoxLayout, QPushButton, QComboBox
 from .job_page import JobPage
+from .theme import theme_color, themed_text
 from .fonts import monospace_family
+from pathlib import Path
 from eitri.backend.schematic_theme import CANVAS
 
 
@@ -14,17 +16,23 @@ class SchematicView(QGraphicsView):
         super().__init__(parent)
         self.setScene(QGraphicsScene(self))
         # Match the SVG canvas so zooming and panning have no visible seam.
-        self.setBackgroundBrush(QColor(CANVAS))
+        self.setBackgroundBrush(QColor(theme_color(CANVAS)))
+        self.svg_source = None  # Original SVG text, retained even if a run is cleaned up.
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setMinimumHeight(100)
 
     def load_svg(self, path):
+        source = Path(path).read_text(encoding='utf-8')
+        self._render_svg(source)
+        self.svg_source = source
+
+    def _render_svg(self, source):
         # netlistsvg font-family lists are misread as one name by Qt SVG.
         # Resolve a local font for the preview; leave exported SVG unchanged.
         import xml.etree.ElementTree as ET
-        root = ET.parse(path).getroot()
+        root = ET.fromstring(themed_text(source))
         family = monospace_family()
         for element in root.iter():
             if 'font-family' in element.attrib:
@@ -41,6 +49,17 @@ class SchematicView(QGraphicsView):
         self.scene().addItem(item)
         self.scene().setSceneRect(item.boundingRect().adjusted(-20, -20, 20, 20))
         self.fit()
+
+    def refresh_theme(self):
+        self.setBackgroundBrush(QColor(theme_color(CANVAS)))
+        if self.svg_source:
+            transform = self.transform()
+            h, v = self.horizontalScrollBar().value(), self.verticalScrollBar().value()
+            self._render_svg(self.svg_source)
+            self.setTransform(transform)
+            self.horizontalScrollBar().setValue(h)
+            self.verticalScrollBar().setValue(v)
+        self.viewport().update()
 
     def zoom_by(self, factor):
         current = self.transform().m11()
@@ -118,8 +137,17 @@ class CircuitPage(JobPage):
         self.components.clear()
         self.components.addItems(result.get('components', []))
         self.expand_button.setEnabled(self.components.count() > 0)
-        self.status.setText(f'{result["top"]} · {result.get("detail", "Detailed")} · {result["cells"]} cells · {result["ports"]} ports. Drag or scroll to pan; pinch or use +/− to zoom.')
+        self.status.setText(f'{result["top"]} · {result.get("detail", "Detailed")} · {result["cells"]} cells · {result["ports"]} ports. Binary logic schematic. Drag or scroll to pan; pinch or use +/− to zoom.')
 
     def export_svg(self):
         if self.svg_file:
-            self.export_file(self.svg_file, 'Export circuit schematic', 'SVG image (*.svg)')
+            from pathlib import Path
+            from PySide6.QtWidgets import QFileDialog, QMessageBox
+            filename, _ = QFileDialog.getSaveFileName(self, 'Export circuit schematic', 'schematic.svg', 'SVG image (*.svg)')
+            if filename:
+                try:
+                    if Path(filename).resolve() == self.svg_file.resolve():
+                        raise ValueError('Choose a destination outside the original run artifact.')
+                    Path(filename).write_text(themed_text(self.svg_file.read_text(encoding='utf-8')), encoding='utf-8')
+                except (OSError, ValueError) as error:
+                    QMessageBox.critical(self, 'Export failed', str(error))

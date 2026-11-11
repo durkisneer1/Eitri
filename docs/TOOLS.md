@@ -56,7 +56,18 @@ Workers stop after ten minutes or if their VCD exceeds 256 MB.
 
 GHDL lowers the selected hierarchy to Verilog; Yosys builds a netlist and
 netlistsvg draws it. **Simple** keeps component and memory blocks. **Detailed**
-expands hierarchy and inferred memory into registers and logic.
+expands hierarchy and inferred memory into registers and logic. Exhaustive
+binary mux decoders are grouped into one labeled mux in Simple; Detailed
+expands recognized muxes and 2:1 muxes into AND, NOT, and OR gates. Bus-wide
+gates represent parallel gates for every bit (a 32-bit mux keeps its buses
+together). This is an equivalent educational schematic for binary inputs,
+not a claim about a particular FPGA's physical gate layout. Incomplete or
+overlapping decoders remain explicit. The original `netlist.json` is preserved;
+these display transformations are stored in `schematic.json`.
+Detailed also removes mux branches that are identical and shares repeated bit
+functions. **Repeat ×N** is wire replication, not an extra logic gate. A
+zero/sign extender therefore shows its low word passing through and one AND
+gate driving the repeated sign bit in its upper word.
 
 In a Simple circuit, select a component and choose **Expand** to replace that
 component with its implementation while retaining sibling blocks. **Collapse
@@ -71,3 +82,21 @@ input rather than a faulty design.
 
 Use **Component hierarchy** to explore source relationships and port maps
 without synthesis, then compare that structure with the circuit implementation.
+
+
+## Appearance
+
+Use **Light mode / Dark mode** at the bottom left to switch appearance. The
+choice is saved across launches and applies to the editor, diagnostics, timing
+diagram, circuit preview and component hierarchy. Switching does not rebuild
+circuits or change source files. Individual SVG exports use the current theme;
+ZIP run exports preserve the original artifacts.
+
+Arithmetic and registers retain their operation symbols in Detailed mode; it
+is not a universal technology mapper. Reductions (many bits to one), whole-bus
+zero tests, and parallel bitwise gates have distinct labels. Different VHDL
+coding styles can synthesize to different but equivalent structures (for
+example, a priority mux chain versus a parallel case decoder).
+
+See [circuit generation review](CIRCUIT_GENERATION.md) for transformation rules,
+verification coverage and remaining limits.

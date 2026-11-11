@@ -1,4 +1,5 @@
 """Qt text editor with a line-number gutter and VHDL lexical highlighting."""
+from .theme import theme_color
 import re
 
 from PySide6.QtCore import QEvent, QRect, QSize, Qt, Signal
@@ -62,7 +63,7 @@ class CodeEditor(QPlainTextEdit):
 
     def highlight_line(self):
         selection = QTextEdit.ExtraSelection()
-        selection.format.setBackground(QColor('#30302d'))
+        selection.format.setBackground(QColor(theme_color('#30302d')))
         selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
         selection.cursor = self.textCursor()
         selection.cursor.clearSelection()
@@ -76,7 +77,7 @@ class CodeEditor(QPlainTextEdit):
                 end = min(mark.cursor.position() + 1, self.document().characterCount() - 1)
             mark.cursor.setPosition(end, QTextCursor.MoveMode.KeepAnchor)
             mark.format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.WaveUnderline)
-            mark.format.setUnderlineColor(QColor('#e58c7c' if diagnostic.get('severity', 1) == 1 else '#d1b578'))
+            mark.format.setUnderlineColor(QColor(theme_color('#e58c7c' if diagnostic.get('severity', 1) == 1 else '#d1b578')))
             mark.format.setToolTip(diagnostic['message'])
             selections.append(mark)
         self.setExtraSelections(selections)
@@ -84,7 +85,7 @@ class CodeEditor(QPlainTextEdit):
 
     def paint_gutter(self, event):
         painter = QPainter(self.gutter)
-        painter.fillRect(event.rect(), QColor('#242423'))
+        painter.fillRect(event.rect(), QColor(theme_color('#242423')))
         painter.setFont(self.font())
         block = self.firstVisibleBlock()
         top = round(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
@@ -92,7 +93,7 @@ class CodeEditor(QPlainTextEdit):
             height = round(self.blockBoundingRect(block).height())
             if block.isVisible() and top + height >= event.rect().top():
                 active = block.blockNumber() == self.textCursor().blockNumber()
-                painter.setPen(QColor('#c9bb9f' if active else '#817c73'))
+                painter.setPen(QColor(theme_color('#c9bb9f' if active else '#817c73')))
                 painter.drawText(0, top, self.gutter.width() - 12, self.fontMetrics().height(),
                                  Qt.AlignmentFlag.AlignRight, str(block.blockNumber() + 1))
             top += height

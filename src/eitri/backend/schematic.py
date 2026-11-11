@@ -1,14 +1,16 @@
-"""Adapt four-state constants for netlistsvg without changing the real netlist."""
+"""Build educational schematics without changing the compiler's netlist."""
 from copy import deepcopy
 
 
-def display_netlist(netlist, top=None):
-    """Represent X/Z as labeled source boxes in a renderer-only copy.
+def display_netlist(netlist, top=None, detail='Simple'):
+    """Recognize/expand muxes and represent X/Z in a renderer-only copy.
 
     netlistsvg 1.0.2 rejects Z and does not render X as a proper constant node.
     Separate synthetic nets preserve the distinction instead of treating Z as 0.
     The original netlist.json remains the authoritative synthesis artifact.
     """
+    if detail not in ('Simple', 'Detailed'):
+        raise ValueError('Choose Simple or Detailed circuit generation.')
     display = deepcopy(netlist)
     if top is not None:
         # Child implementations stay in the exported netlist. The renderer sees
@@ -23,13 +25,21 @@ def display_netlist(netlist, top=None):
                 cell.setdefault('attributes', {})['component_type'] = re.sub(r'_B[^_]+$', '', original_type)
                 cell['type'] = name
     for module in display['modules'].values():
+        from .mux_schematic import mux_schematic, repeat_schematic
+        mux_schematic(module, detailed=detail == 'Detailed')
+        label_operators(module)
+        repeat_schematic(module)
         # Scope markers retain source attributes after flattening, not hardware.
         module['cells'] = {name: cell for name, cell in module.get('cells', {}).items()
                            if cell.get('type') != '$scopeinfo'}
         vectors = [port['bits'] for port in module.get('ports', {}).values()]
-        vectors += [net['bits'] for net in module.get('netnames', {}).values()]
+        # Net aliases are labels, not sinks. Unused X/Z aliases must not
+        # manufacture floating 'Unknown' hardware boxes after simplification.
+        module['netnames'] = {name: net for name, net in module.get('netnames', {}).items()
+                              if not any(b in ('x', 'z') for b in net['bits'])}
         vectors += [bits for cell in module.get('cells', {}).values() for bits in cell.get('connections', {}).values()]
-        next_bit = max((bit for bits in vectors for bit in bits if isinstance(bit, int)), default=1) + 1
+        allocated = vectors + [net['bits'] for net in module.get('netnames', {}).values()]
+        next_bit = max((bit for bits in allocated for bit in bits if isinstance(bit, int)), default=1) + 1
         sources = {}
         for bits in vectors:
             for value, title in (('z', 'High impedance (Z)'), ('x', 'Unknown (X)')):
@@ -94,3 +104,35 @@ def inline_svg_styles(path):
             visit(child, {key: value for key, value in properties.items() if key in inherited_keys})
     visit(root, {})
     tree.write(path, encoding='utf-8', xml_declaration=True)
+
+
+def label_operators(module):
+    """Distinguish reductions/Boolean tests from parallel bitwise gates.
+
+    The stock skin aliases multi-bit $logic_not to a single inverter and
+    $reduce_xor to a two-input XOR. Those pictures conceal different operations.
+    Labels and skins change here; connections and HDL parameters do not.
+    """
+    reductions = {'$logic_not': 'Zero test', '$reduce_and': 'Reduce AND',
+                  '$reduce_or': 'Reduce OR', '$reduce_xor': 'Reduce XOR',
+                  '$reduce_xnor': 'Reduce XNOR', '$reduce_bool': 'Nonzero test'}
+    for cell in module['cells'].values():
+        kind = cell['type']
+        ports = cell.get('connections', {})
+        attrs = cell.setdefault('attributes', {})
+        widths = [len(ports[p]) for p in ('A', 'B') if p in ports]
+        if not widths:
+            continue
+        if kind in reductions or (kind in ('$logic_and', '$logic_or') and max(widths) > 1):
+            if kind == '$logic_not' and widths == [1]:
+                continue
+            cell['type'] = reductions.get(kind, 'Logical AND' if kind == '$logic_and' else 'Logical OR')
+            attrs['operation_type'] = kind
+            attrs['component_type'] = ('A == 0' if kind == '$logic_not' else 'Nonzero operands'
+                                       if kind.startswith('$logic_') else f'{widths[0]} bits → 1 bit')
+        elif kind in ('$and', '$or', '$xor', '$xnor', '$not') and len(ports.get('Y', [])) > 1:
+            width = len(ports['Y'])
+            # Unequal-width arithmetic needs its original width/sign semantics.
+            if all(w == width for w in widths):
+                attrs.update(operation_type=kind, gate_type=kind, gate_width=width)
+                cell['type'] = f'eitri_{kind[1:]}_{width}'

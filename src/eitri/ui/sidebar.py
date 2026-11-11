@@ -93,6 +93,10 @@ class Sidebar(QScrollArea):
             else:
                 self.circuit_detail = QComboBox()
                 self.circuit_detail.addItems(['Simple', 'Detailed'])
+                self.circuit_detail.setToolTip(
+                    'Simple: component, memory and mux blocks.\n'
+                    'Detailed: expand components, memories and mux logic.\n'
+                    'Arithmetic and registers retain their symbols. Both views show synthesized binary logic.')
                 field(f, 'Circuit detail', self.circuit_detail)
             f.addWidget(button('Configure / save target…', lambda k=kind: self.save_target_requested.emit(k)))
             self.options.addWidget(page)

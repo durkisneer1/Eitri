@@ -1,5 +1,6 @@
 """Layout skin and SVG palette for both previews and exported schematics."""
 from importlib.resources import files
+from copy import deepcopy
 import xml.etree.ElementTree as ET
 
 SVG = '{http://www.w3.org/2000/svg}'
@@ -58,20 +59,76 @@ def write_skin(path, netlist):
         text.attrib.pop('style', None)
     style = root.find(SVG + 'style')
     style.text += '\n.boxOutputLabel { text-anchor:end; }\n.boxInputLabel { text-anchor:start; }'
+    repeats = {cell['attributes']['repeat_count'] for module in netlist['modules'].values()
+               for cell in module.get('cells', {}).values() if 'repeat_count' in cell.get('attributes', {})}
+    for count in repeats:
+        kind = f'eitri_repeat_{count}'
+        group = ET.SubElement(root, SVG + 'g', {SKIN + 'type': kind, SKIN + 'width': '100', SKIN + 'height': '40'})
+        ET.SubElement(group, SKIN + 'alias', {'val': kind})
+        ET.SubElement(group, SVG + 'rect', {'width': '100', 'height': '40', 'rx': '4', 'class': '$cell_id'})
+        ET.SubElement(group, SVG + 'text', {'x': '50', 'y': '24', 'text-anchor': 'middle'}).text = f'Repeat ×{count}'
+        ET.SubElement(group, SVG + 'g', {SKIN + 'x': '0', SKIN + 'y': '20', SKIN + 'pid': 'A'})
+        ET.SubElement(group, SVG + 'g', {SKIN + 'x': '100', SKIN + 'y': '20', SKIN + 'pid': 'Y'})
+    bus_gates = {cell['type']: cell for module in netlist['modules'].values()
+                 for cell in module.get('cells', {}).values()
+                 if cell.get('attributes', {}).get('gate_width', 0) > 1}
+    for kind, cell in bus_gates.items():
+        base = cell['attributes']['gate_type'][1:]
+        base = {'xor': 'reduce_xor', 'xnor': 'reduce_nxor'}.get(base, base)
+        group = deepcopy(next(node for node in root.findall(SVG + 'g') if node.get(SKIN + 'type') == base))
+        group.set(SKIN + 'type', kind)
+        group.set(SKIN + 'height', '43')
+        for alias in group.findall(SKIN + 'alias'):
+            group.remove(alias)
+        ET.SubElement(group, SKIN + 'alias', {'val': kind})
+        ET.SubElement(group, SVG + 'text', {'x': '15', 'y': '40', 'text-anchor': 'middle'}).text = f"×{cell['attributes']['gate_width']}"
+        root.append(group)
+    muxes = {cell['type']: cell for module in netlist['modules'].values()
+             for cell in module.get('cells', {}).values() if 'mux_inputs' in cell.get('attributes', {}) and 'component_type' not in cell['attributes']}
+    for kind, cell in muxes.items():
+        count = cell['attributes']['mux_inputs']
+        bits = cell['attributes']['mux_width']
+        height = max(100, count * 28 + 28)
+        group = ET.SubElement(root, SVG + 'g', {SKIN + 'type': kind,
+                              SKIN + 'width': '110', SKIN + 'height': str(height)})
+        ET.SubElement(group, SKIN + 'alias', {'val': kind})
+        ET.SubElement(group, SVG + 'path', {'d': f'M0,0 L110,20 L110,{height-20} L0,{height} Z',
+                                          'class': '$cell_id'})
+        for y, text in ((height / 2 - 8, f'{count}:1 MUX'), (height / 2 + 10, f'{bits}-bit')):
+            ET.SubElement(group, SVG + 'text', {'x': '57', 'y': str(y), 'text-anchor': 'middle'}).text = text
+        for i in range(count):
+            y = 20 + i * 28
+            ET.SubElement(group, SVG + 'g', {SKIN + 'x': '0', SKIN + 'y': str(y), SKIN + 'pid': f'D{i}'})
+            ET.SubElement(group, SVG + 'text', {'x': '5', 'y': str(y + 4)}).text = str(i)
+        ET.SubElement(group, SVG + 'g', {SKIN + 'x': '110', SKIN + 'y': str(height / 2), SKIN + 'pid': 'Y'})
+        ET.SubElement(group, SVG + 'g', {SKIN + 'x': '55', SKIN + 'y': str(height-10), SKIN + 'pid': 'S'})
+        ET.SubElement(group, SVG + 'text', {'x': '55', 'y': str(height-19), 'text-anchor': 'middle'}).text = 'S'
     ET.ElementTree(root).write(path, encoding='utf-8', xml_declaration=True)
 
 
-def color_schematic(path):
+def color_schematic(path, netlist=None):
     """Use explicit presentation attributes so Qt and SVG exports agree."""
     tree = ET.parse(path)
     root = tree.getroot()
 
-    def visit(node, kind=None):
+    cells = {name: cell for module in (netlist or {}).get('modules', {}).values()
+             for name, cell in module.get('cells', {}).items()}
+
+    def visit(node, kind=None, attributes=None):
+        # netlistsvg splits label IDs on '.', so compiler cell names such as
+        # $reduce_xor$design.v:23 lose custom captions. Restore them from the
+        # display artifact without renaming cells or editing the vendor code.
+        cell = cells.get(node.get('id', '').removeprefix('cell_'))
+        if cell is not None:
+            attributes = cell.get('attributes', {})
         kind = node.get(SKIN + 'type', kind)
         tag = node.tag.split('}')[-1]
         node.attrib.pop('style', None)
         net = any(part.startswith('net_') for part in node.get('class', '').split())
         if tag == 'text':
+            attribute = node.get(SKIN + 'attribute')
+            if attributes and attribute in attributes:
+                node.text = str(attributes[attribute])
             node.set('fill', PORT if kind in ('inputExt', 'outputExt') else TEXT)
             node.set('stroke', 'none')
             node.set('font-weight', 'normal')
@@ -89,7 +146,7 @@ def color_schematic(path):
                 node.set('fill', ('#35453b' if external else BOX) if tag != 'line' else 'none')
             node.set('stroke-width', '1.4')
         for child in node:
-            visit(child, kind)
+            visit(child, kind, attributes)
 
     visit(root)
     # The stock generic skin draws its header before the body. Filled boxes

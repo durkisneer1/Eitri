@@ -138,12 +138,12 @@ def render_circuit(request, directory, log):
     modules = netlist['modules']
     top = next((name for name, module in modules.items()
                 if str(module.get('attributes', {}).get('top', '')).endswith('1')), next(iter(modules)))
-    display = display_netlist(netlist, top=top)
+    display = display_netlist(netlist, top=top, detail=detail)
     (directory / 'schematic.json').write_text(json.dumps(display), encoding='utf-8')
     write_skin(directory / 'skin.svg', display)
     netlistsvg.render(directory / 'schematic.json', directory / 'schematic.svg', skin=directory / 'skin.svg', timeout=90)
     inline_svg_styles(directory / 'schematic.svg')
-    color_schematic(directory / 'schematic.svg')
+    color_schematic(directory / 'schematic.svg', display)
     module = modules[top]
     return {'kind': 'circuit', 'svg': 'schematic.svg', 'top': top,
             'detail': detail, 'cells': len(display['modules'][top].get('cells', {})), 'ports': len(module.get('ports', {})),

@@ -1,4 +1,5 @@
 """Scrollable digital timing diagram, rendered only for the visible time range."""
+from .theme import theme_color
 from bisect import bisect_left, bisect_right
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPolygonF
@@ -84,9 +85,9 @@ class WaveformView(QAbstractScrollArea):
             self._paint_waveform(painter)
 
     def _paint_waveform(self, painter):
-        painter.fillRect(self.viewport().rect(), QColor('#242423'))
+        painter.fillRect(self.viewport().rect(), QColor(theme_color('#242423')))
         if not self.signals:
-            painter.setPen(QColor('#aaa59b'))
+            painter.setPen(QColor(theme_color('#aaa59b')))
             painter.drawText(self.viewport().rect(), Qt.AlignmentFlag.AlignCenter, 'Run a simulation, then select signals to display.')
             return
         width = max(1, self.viewport().width() - self.LEFT)
@@ -98,21 +99,21 @@ class WaveformView(QAbstractScrollArea):
             return self.LEFT + tick * scale - offset
 
         # The ruler stays fixed while signal rows scroll vertically.
-        painter.setPen(QColor('#9c9588'))
+        painter.setPen(QColor(theme_color('#9c9588')))
         for index in range(6):
             tick = start + (stop - start) * index / 5
             xpos = x(tick)
             painter.drawText(QRectF(xpos + 3, 0, 100, self.TOP), time_label(tick, self.timescale))
-            painter.setPen(QColor('#3c3933'))
+            painter.setPen(QColor(theme_color('#3c3933')))
             painter.drawLine(QPointF(xpos, self.TOP), QPointF(xpos, self.viewport().height()))
-            painter.setPen(QColor('#9c9588'))
+            painter.setPen(QColor(theme_color('#9c9588')))
 
         painter.setClipRect(0, self.TOP, self.viewport().width(), self.viewport().height() - self.TOP)
         for row, signal in enumerate(self.signals):
             y = self.TOP + row * self.ROW - self.verticalScrollBar().value()
             if y + self.ROW < self.TOP or y > self.viewport().height():
                 continue
-            painter.setPen(QColor('#dedbd5'))
+            painter.setPen(QColor(theme_color('#dedbd5')))
             name = painter.fontMetrics().elidedText(signal['name'].split('.', 1)[-1], Qt.TextElideMode.ElideLeft, self.LEFT - 14)
             painter.drawText(QRectF(6, y, self.LEFT - 12, self.ROW), Qt.AlignmentFlag.AlignVCenter, name)
             events = signal['events']
@@ -124,8 +125,8 @@ class WaveformView(QAbstractScrollArea):
                 # Dense traces need zooming; drawing hundreds of thousands of edges
                 # on each mouse click would stall the GUI with no useful detail.
                 if last - first > 2000:
-                    painter.fillRect(QRectF(self.LEFT, y + 8, width, 20), QColor('#716044'))
-                    painter.setPen(QColor('#e5dfd3'))
+                    painter.fillRect(QRectF(self.LEFT, y + 8, width, 20), QColor(theme_color('#716044')))
+                    painter.setPen(QColor(theme_color('#e5dfd3')))
                     painter.drawText(QRectF(self.LEFT + 8, y, width - 8, self.ROW), Qt.AlignmentFlag.AlignVCenter, 'Dense transitions — zoom in')
                     continue
                 segments = events[first:last + 1] if events else [[0, 'X']]
@@ -137,7 +138,7 @@ class WaveformView(QAbstractScrollArea):
                     if right <= left:
                         continue
                     color = '#c8877c' if any(bit in value for bit in 'UXW-') else ('#a49aac' if 'Z' in value else '#b9c4a1')
-                    painter.setPen(QPen(QColor(color), 1.4))
+                    painter.setPen(QPen(QColor(theme_color(color)), 1.4))
                     high, low = y + 8, y + 28
                     if signal['width'] == 1 and value in ('0', '1'):
                         level = high if value == '1' else low
@@ -157,5 +158,5 @@ class WaveformView(QAbstractScrollArea):
         painter.setClipping(False)
         cursor_x = x(self.cursor)
         if self.LEFT <= cursor_x <= self.viewport().width():
-            painter.setPen(QPen(QColor('#d1b578'), 1))
+            painter.setPen(QPen(QColor(theme_color('#d1b578')), 1))
             painter.drawLine(QPointF(cursor_x, self.TOP), QPointF(cursor_x, self.viewport().height()))
