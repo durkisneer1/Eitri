@@ -138,6 +138,7 @@ def executable_display(module):
 ])
 def test_synthesis_to_display_equivalence(tmp_path, body):
     from eitri.backend.pipeline import run_pipeline
+    pytest.importorskip('ghdl')
     yosys = pytest.importorskip('yosys')
     source = '''library ieee; use ieee.std_logic_1164.all; use ieee.numeric_std.all;
 entity top is port(a,b,c,d: in std_logic_vector(3 downto 0);
