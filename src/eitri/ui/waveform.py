@@ -103,7 +103,10 @@ class WaveformView(QAbstractScrollArea):
         for index in range(6):
             tick = start + (stop - start) * index / 5
             xpos = x(tick)
-            painter.drawText(QRectF(xpos + 3, 0, 100, self.TOP), time_label(tick, self.timescale))
+            label = time_label(tick, self.timescale)
+            label_width = painter.fontMetrics().horizontalAdvance(label) + 6
+            label_x = max(self.LEFT, min(xpos + 3, self.viewport().width() - label_width))
+            painter.drawText(QRectF(label_x, 0, label_width, self.TOP), label)
             painter.setPen(QColor(theme_color('#3c3933')))
             painter.drawLine(QPointF(xpos, self.TOP), QPointF(xpos, self.viewport().height()))
             painter.setPen(QColor(theme_color('#9c9588')))

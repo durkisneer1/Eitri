@@ -116,7 +116,7 @@ def run_project_pipeline(request, directory, log=print):
             if request['wave_format'] == 'GHW':
                 args.append('--wave=' + str(directory / 'wave.ghw'))
             invoke('Simulate ' + target['name'], args, cache)
-            waveform = parse_vcd(wave)
+            waveform = parse_vcd(wave, stop_time=request['stop_time'])
             (directory / 'waveform.json').write_text(json.dumps(waveform))
             return {'kind': 'simulation', 'waveform': 'waveform.json', 'target_name': target['name'],
                     'wave_file': 'wave.ghw' if request['wave_format'] == 'GHW' else 'wave.vcd',

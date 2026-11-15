@@ -11,7 +11,7 @@ MAX_EVENTS = 150_000
 MAX_SIGNALS = 512
 
 
-def parse_vcd(path):
+def parse_vcd(path, stop_time=None):
     if path.stat().st_size > MAX_FILE_BYTES:
         return {'signals': [], 'end_time': 0, 'timescale': '1 fs',
                 'warning': 'VCD exceeds the 64 MB preview limit. Export it or open it in GTKWave.'}
@@ -75,7 +75,23 @@ def parse_vcd(path):
                 elif not events or events[-1][1] != value:
                     events.append([timestamp, value])
                     count += 1
-    return {'signals': signals, 'end_time': end_time, 'timescale': timescale, 'warning': warning}
+    data = {'signals': signals, 'end_time': end_time, 'timescale': timescale, 'warning': warning}
+    # A quiet final wait need not produce a VCD timestamp. Extend the preview,
+    # not the event data or exported VCD, to the user's requested boundary.
+    # Never carry values across changes omitted by the event limit.
+    if stop_time is not None and not warning.startswith('Preview truncated'):
+        units = {'fs': 1, 'ps': 10**3, 'ns': 10**6, 'us': 10**9,
+                 'ms': 10**12, 's': 10**15, 'sec': 10**15}
+        def duration(value):
+            match = re.fullmatch(r'\s*(\d+)\s*(fs|ps|ns|us|ms|s|sec)\s*', value, re.I)
+            if not match:
+                raise ValueError(f'Invalid waveform duration: {value}')
+            return int(match[1]) * units[match[2].lower()]
+        ticks, remainder = divmod(duration(stop_time), duration(timescale))
+        requested_end = ticks + remainder / duration(timescale) if remainder else ticks
+        data['recorded_end_time'] = end_time
+        data['end_time'] = max(end_time, requested_end)
+    return data
 
 
 def value_at(signal, timestamp):

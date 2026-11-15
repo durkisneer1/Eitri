@@ -83,7 +83,7 @@ Start by opening a folder containing your VHDL files, or try the [learning CPU w
 
 For troubleshooting, use `eitri --foreground` to keep diagnostic output in the terminal. Background logs are saved to `~/Library/Logs/Eitri/eitri.log` on macOS, `%LOCALAPPDATA%/Eitri/eitri.log` on Windows, or `${XDG_STATE_HOME:-~/.local/state}/Eitri/eitri.log` on Linux. The built-in waveform viewer needs no external application; opening a waveform in GTKWave requires a separate GTKWave installation.
 
-[Editor guide](docs/EDITOR.md) · [Simulation and circuit tools](docs/TOOLS.md) · [What's new in 0.4.0](docs/releases/0.4.0.md) · [License](LICENSE)
+[Editor guide](docs/EDITOR.md) · [Simulation and circuit tools](docs/TOOLS.md) · [What's new in 0.4.1](docs/releases/0.4.1.md) · [License](LICENSE)
 
 ## Contributing
 

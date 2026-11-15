@@ -86,3 +86,69 @@ def test_painter_cleanup_on_render_failure(monkeypatch):
     finally:
         view.close()
         app.processEvents()
+
+
+@pytest.mark.parametrize('timescale,last,stop,expected', [
+    ('1 fs', 50_000_000, '60ns', 60_000_000),
+    ('10 ps', 5000, '1US', 100_000),
+    ('1 ns', 50, '60ns', 60),
+    ('10 ns', 5, '55ns', 5.5),
+    ('1 ns', 50, '40ns', 50),
+])
+def test_requested_stop_keeps_final_case_visible(tmp_path, timescale, last, stop, expected):
+    from eitri.backend.vcd import value_at
+    path = tmp_path / 'final.vcd'
+    source = (f'$timescale {timescale} $end\n$var wire 9 ! result $end\n'
+              f'$enddefinitions $end\n#0\nb0 !\n#{last}\nb100000001 !\n')
+    path.write_text(source, encoding='utf-8')
+    original = parse_vcd(path)
+    preview = parse_vcd(path, stop_time=stop)
+    assert preview['end_time'] == expected
+    assert preview['recorded_end_time'] == last
+    assert preview['signals'] == original['signals']
+    assert value_at(preview['signals'][0], expected) == '100000001'
+    assert path.read_text(encoding='utf-8') == source
+
+
+def test_truncated_preview_does_not_hold_potentially_stale_values(tmp_path, monkeypatch):
+    monkeypatch.setattr('eitri.backend.vcd.MAX_EVENTS', 1)
+    path = tmp_path / 'limited.vcd'
+    path.write_text('$var wire 1 ! data $end\n$enddefinitions $end\n#0\n0!\n#10\n1!\n')
+    data = parse_vcd(path, stop_time='60ns')
+    assert data['end_time'] == 10
+    assert 'truncated' in data['warning']
+
+
+def test_final_case_can_be_selected_after_last_vcd_timestamp(tmp_path):
+    import json
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    app = QApplication.instance() or QApplication([])
+    path = tmp_path / 'wave.vcd'
+    path.write_text('$timescale 1 ns $end\n$var wire 9 ! result $end\n'
+                    '$enddefinitions $end\n#0\nb0 !\n#50\nb100000001 !\n')
+    data = parse_vcd(path, stop_time='60ns')
+    (tmp_path / 'wave.json').write_text(json.dumps(data))
+    page = SimulationPage()
+    page.resize(1100, 700)
+    page.show()
+    try:
+        app.processEvents()
+        page.load_result(tmp_path, {'waveform': 'wave.json', 'wave_file': 'wave.vcd', 'signals': 1})
+        app.processEvents()
+        page.wave.fit()
+        width = page.wave.viewport().width() - page.wave.LEFT
+        QTest.mouseClick(page.wave.viewport(), Qt.MouseButton.LeftButton,
+                         pos=QPoint(page.wave.LEFT + round(width * 55 / 60), page.wave.TOP + 15))
+        assert page.wave.cursor == pytest.approx(55, abs=0.2)
+        assert page.signals.topLevelItem(0).text(1) == '101'
+        assert 'Last recorded timestamp: 50 ns' in page.status.text()
+        page.wave.zoom_by(2)
+        page.wave.horizontalScrollBar().setValue(page.wave.horizontalScrollBar().maximum())
+        QTest.mouseClick(page.wave.viewport(), Qt.MouseButton.LeftButton,
+                         pos=QPoint(page.wave.viewport().width() - 2, page.wave.TOP + 15))
+        assert 59 < page.wave.cursor <= 60
+        assert page.signals.topLevelItem(0).text(1) == '101'
+    finally:
+        page.close()
+        app.processEvents()

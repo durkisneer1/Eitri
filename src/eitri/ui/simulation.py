@@ -84,7 +84,11 @@ class SimulationPage(JobPage):
         self.has_result = True
         duration = time_label(self.data['end_time'], self.data['timescale'])
         warning = self.data.get('warning', '')
-        self.status.setText(f'Completed · {result["signals"]} signals · {duration}. {warning}')
+        recorded = self.data.get('recorded_end_time', self.data['end_time'])
+        extension = ''
+        if recorded < self.data['end_time']:
+            extension = f" Last recorded timestamp: {time_label(recorded, self.data['timescale'])}; final values held to the requested stop time."
+        self.status.setText(f'Completed · {result["signals"]} signals · {duration}.{extension} {warning}')
 
     def select_signals(self, *_):
         selected = [self.data['signals'][index] for index in range(self.signals.topLevelItemCount())

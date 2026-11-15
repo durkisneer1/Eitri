@@ -47,7 +47,13 @@ trackpad scrolling. VCD powers the embedded preview; GHW output also produces a
 VCD preview. Export individual waveforms or a ZIP of the complete run.
 GTKWave is an optional external viewer.
 
-The default stop time is 200 ns. Preview limits are 64 MB, 150,000 changes and
+The default stop time is 200 ns. The preview extends to the requested stop time,
+holding the last recorded signal values if the VCD ends earlier. The status line
+identifies this held interval; it does not mean the simulator executed past an
+explicit early stop. Exported VCD/GHW files retain the original simulator data.
+Truncated previews are not extended across omitted changes.
+
+Preview limits are 64 MB, 150,000 changes and
 512 signals. Dense traces ask you to zoom in. Real/string signals are omitted
 from the digital preview. The full waveform remains available for export.
 Workers stop after ten minutes or if their VCD exceeds 256 MB.

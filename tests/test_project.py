@@ -100,6 +100,11 @@ def test_cpu_simulation_incremental_cache_and_unsaved_failure(project, tmp_path)
     request = project.snapshot(target, cache_root=str(tmp_path / 'cache'))
     first = run_pipeline(request, tmp_path / 'first', log=lambda _: None)
     assert first['signals'] > 20
+    waveform = json.loads((tmp_path / 'first/waveform.json').read_text())
+    # cpu_tb calls std.env.stop at 36 ns; the requested 400 ns remains the
+    # display boundary, with the recorded endpoint retained separately.
+    assert waveform['recorded_end_time'] == 36_000_000
+    assert waveform['end_time'] == 400_000_000
     logs = []
     run_pipeline(request, tmp_path / 'second', log=logs.append)
     assert any('analyzed 0.' in log for log in logs)

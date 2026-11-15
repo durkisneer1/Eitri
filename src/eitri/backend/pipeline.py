@@ -91,7 +91,7 @@ def run_pipeline(request, directory, log=print):
         invoke('Simulate to ' + request['stop_time'], ghdl.run, args,
                cwd=directory, capture_output=True, timeout=120)
         log('\n=== Read waveforms ===')
-        waveform = parse_vcd(directory / 'wave.vcd')
+        waveform = parse_vcd(directory / 'wave.vcd', stop_time=request['stop_time'])
         (directory / 'waveform.json').write_text(json.dumps(waveform), encoding='utf-8')
         return {'kind': 'simulation', 'waveform': 'waveform.json',
                 'wave_file': 'wave.ghw' if request['wave_format'] == 'GHW' else 'wave.vcd',
