@@ -276,7 +276,7 @@ begin
 end rtl;
 '''
     parent = tmp_path / 'parent.vhd'
-    parent.write_text(source)
+    parent.write_text(source, encoding='utf-8')
     window.load(parent)
     offsets = {'entity': source.index('port(a'), 'declarations': source.index('function invert'),
                'process': source.index('report'), 'end': len(source)}
@@ -293,7 +293,7 @@ end rtl;
     window.editor.undo()
     assert window.editor.toPlainText() == source
     ghdl = pytest.importorskip('ghdl')
-    parent.write_text(result.replace('<a>', 'a').replace('<y>', 'y'))
+    parent.write_text(result.replace('<a>', 'a').replace('<y>', 'y'), encoding='utf-8')
     ghdl.run(['-a', '--std=08', str(child), str(parent)], cwd=tmp_path, capture_output=True, timeout=30)
 
 
