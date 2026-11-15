@@ -257,3 +257,89 @@ def test_insert_instance_uses_project_source_and_unique_label(window, tmp_path, 
     assert 'u_child_inst : entity work.child' in window.editor.toPlainText()
     assert window.editor.toPlainText().count('a => <a>') == 2
     assert child_path.read_text() == child_source
+
+
+@pytest.mark.parametrize('location', ['entity', 'declarations', 'process', 'end'])
+def test_insert_instance_ignores_unsafe_cursor_and_compiles(window, tmp_path, monkeypatch, location):
+    from PySide6.QtWidgets import QInputDialog
+    from PySide6.QtGui import QTextCursor
+    child = tmp_path / 'child.vhd'
+    child.write_text(design_template(Entity('child', [Port('a', 'in'), Port('y', 'out')])))
+    source = '''library ieee; use ieee.std_logic_1164.all;
+-- Emoji keeps Qt and Python offsets different: 🙂
+entity parent is port(a: in std_logic; y: out std_logic); end parent;
+architecture rtl of parent is
+    function invert(a: std_logic) return std_logic is
+    begin return not a; end function;
+begin
+    process(all) begin report "begin end rtl;"; end process;
+end rtl;
+'''
+    parent = tmp_path / 'parent.vhd'
+    parent.write_text(source)
+    window.load(parent)
+    offsets = {'entity': source.index('port(a'), 'declarations': source.index('function invert'),
+               'process': source.index('report'), 'end': len(source)}
+    cursor = window.editor.textCursor()
+    pos = len(source[:offsets[location]].encode('utf-16-le')) // 2
+    cursor.setPosition(pos)
+    cursor.setPosition(pos + 3, QTextCursor.MoveMode.KeepAnchor)
+    window.editor.setTextCursor(cursor)
+    monkeypatch.setattr(QInputDialog, 'getItem', lambda parent, title, caption, items, *args: (items[0], True))
+    window.design_flow.insert_instance(child)
+    result = window.editor.toPlainText()
+    assert result.index('end process;') < result.index('u_child : entity') < result.rindex('end rtl;')
+    assert window.editor.textCursor().selectedText() == '<a>'
+    window.editor.undo()
+    assert window.editor.toPlainText() == source
+    ghdl = pytest.importorskip('ghdl')
+    parent.write_text(result.replace('<a>', 'a').replace('<y>', 'y'))
+    ghdl.run(['-a', '--std=08', str(child), str(parent)], cwd=tmp_path, capture_output=True, timeout=30)
+
+
+def test_insert_instance_requires_architecture_without_changing_source(window, tmp_path, monkeypatch):
+    source = 'entity unfinished is end unfinished;'
+    target = tmp_path / 'unfinished.vhd'
+    target.write_text(source)
+    window.load(target)
+    warnings = []
+    monkeypatch.setattr(QMessageBox, 'warning', lambda *args: warnings.append(args[2]))
+    window.design_flow.insert_instance()
+    assert window.editor.toPlainText() == source
+    assert 'after its begin' in warnings[0]
+
+
+def test_instance_sites_handle_multiple_architectures_and_end_styles():
+    from eitri.backend.instance_insertion import instance_sites
+    source = '''entity top is end;
+architecture a of top is begin end;
+architecture b of top is begin end architecture b;
+architecture c of top is begin
+  g: if true generate
+  begin
+  end generate;
+end architecture;
+'''
+    sites = instance_sites(source)
+    assert [(s.entity, s.architecture) for s in sites] == [('top', 'a'), ('top', 'b'), ('top', 'c')]
+    assert source[sites[0].offset:].startswith('end;')
+    assert source[sites[2].offset:].startswith('end architecture;')
+
+
+def test_insert_instance_asks_for_destination_outside_multiple_architectures(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog
+    child = tmp_path / 'child.vhd'
+    child.write_text(design_template(Entity('child')))
+    parent = tmp_path / 'parent.vhd'
+    parent.write_text('entity parent is end;\narchitecture first of parent is begin end first;\n'
+                      'architecture second of parent is begin end second;\n')
+    window.load(parent)
+    calls = []
+    def choose(parent, title, caption, items, *args):
+        calls.append(title)
+        return (items[1] if title == 'Choose destination architecture' else items[0], True)
+    monkeypatch.setattr(QInputDialog, 'getItem', choose)
+    window.design_flow.insert_instance(child)
+    source = window.editor.toPlainText()
+    assert calls == ['Choose destination architecture', 'Insert component instance']
+    assert source.index('end first;') < source.index('u_child : entity') < source.index('end second;')

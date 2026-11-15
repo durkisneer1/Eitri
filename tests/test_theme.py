@@ -52,7 +52,9 @@ def test_live_theme_and_saved_preference(tmp_path, monkeypatch, qt_application_l
         assert svg.read_bytes() == original
         window.documents.add()
         assert window.editor.highlighter.styles['keyword'].foreground().color().name() == theme_color('#bba7c4')
-        assert window.theme_toggle.text() == 'Dark mode'
+        assert window.theme_toggle.text() == ''
+        assert window.theme_toggle.accessibleName() == 'Switch to dark mode'
+        assert not window.theme_toggle.icon().isNull()
         # A second workspace loads the preference without resetting it.
         second = Workspace(run_root=tmp_path / 'second')
         assert current_mode() == 'Light'

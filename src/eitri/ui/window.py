@@ -35,7 +35,7 @@ class Workspace(QMainWindow):
         self.project = None
         self.refreshing = False
         self.rendered_revision = -1
-        self.code_page = CodePage()
+        self.code_page = CodePage(settings=self.theme_settings)
         self.documents = DocumentController(self)
         self.design_flow = DesignFlow(self)
         self.toolbar = Toolbar()
@@ -64,8 +64,8 @@ class Workspace(QMainWindow):
         self.page_name = label('Open a folder to start')
         self.position = label('')
         self.page_name.hide()
-        self.theme_toggle = QPushButton()
-        self.theme_toggle.setAccessibleName('Toggle light and dark mode')
+        from .assistance_panel import icon_button
+        self.theme_toggle = icon_button(self, 'sun', 'Switch to light mode')
         self.theme_toggle.clicked.connect(self.toggle_theme)
         self.statusBar().addWidget(self.theme_toggle)
         self.update_theme_button()
@@ -108,7 +108,9 @@ class Workspace(QMainWindow):
 
     def update_theme_button(self):
         target = 'Light' if current_mode() == 'Dark' else 'Dark'
-        self.theme_toggle.setText(target + ' mode')
+        from .icons import control_icon
+        self.theme_toggle.setIcon(control_icon('sun' if target == 'Light' else 'moon'))
+        self.theme_toggle.setAccessibleName('Switch to ' + target.lower() + ' mode')
         self.theme_toggle.setToolTip('Switch to ' + target.lower() + ' mode')
 
     def toggle_theme(self):
@@ -123,6 +125,7 @@ class Workspace(QMainWindow):
             editor.highlight_line()
         for index, button in enumerate(self.toolbar.mode_buttons.buttons()):
             button.setIcon(mode_icon(index))
+        self.code_page.assistance_panel.refresh_theme(self.code_page.editor_split.dock)
         self.circuit_page.view.refresh_theme()
         self.hierarchy_page.refresh_theme()
         self.simulation_page.wave.viewport().update()
@@ -143,7 +146,7 @@ class Workspace(QMainWindow):
     def connect_editor(self, editor):
         editor.cursorPositionChanged.connect(self.update_position)
         editor.document().modificationChanged.connect(self.update_title)
-        editor.textChanged.connect(self.source_changed)
+        editor.source_changed.connect(self.source_changed)
 
     def source_changed(self):
         self.update_title()
@@ -419,13 +422,15 @@ class Workspace(QMainWindow):
         event.accept()
 
 
-def main():
+def main(folder=None):
     app = QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName('Eitri')
     app.setOrganizationName('Eitri')
     app.setStyle('Fusion')
     window = Workspace()
     window.show()
+    if folder is not None:
+        window.open_folder(Path(folder))
     sys.exit(app.exec())
 
 

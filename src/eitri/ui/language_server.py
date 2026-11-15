@@ -165,6 +165,7 @@ class EditorAssistance(QObject):
         self.server.notification.connect(self.notification)
         self.server.failed.connect(self.failed)
         self.documents, self.aliases, self.diagnostics = {}, {}, {}
+        self.pending, self.checked, self.unsent_edits = set(), set(), set()
         self.identity = None
         self.unavailable = self.closed = False
         self.timer = QTimer(self)
@@ -179,7 +180,7 @@ class EditorAssistance(QObject):
             self.connect_editor(editor)
 
     def connect_editor(self, editor):
-        editor.textChanged.connect(self.changed)
+        editor.source_changed.connect(self.changed)
         editor.hover_requested.connect(lambda position, point, e=editor: self.query(e, position, 'hover', point))
         editor.definition_requested.connect(lambda e=editor: self.query(e, server_position(e.textCursor()), 'definition'))
         self.schedule()
@@ -188,7 +189,10 @@ class EditorAssistance(QObject):
         editor = self.sender()
         if editor in self.page.editors:
             editor.set_diagnostics([])
-            self.diagnostics.pop(self.uri_for(editor), None)
+            uri = self.uri_for(editor)
+            self.pending.add(uri)
+            self.unsent_edits.add(uri)
+            self.diagnostics.pop(uri, None)
         self.rebuild_problems()
         self.schedule()
 
@@ -204,6 +208,10 @@ class EditorAssistance(QObject):
         self.server.stop()
         self.documents.clear()
         self.diagnostics.clear()
+        self.pending.clear()
+        self.unsent_edits.clear()
+        self.checked.clear()
+        self.page.assistance_panel.reset_feedback()
         self.identity = None
         self.unavailable = False
         for editor in self.page.editors:
@@ -216,6 +224,9 @@ class EditorAssistance(QObject):
         self.server.stop()
         self.page.lsp_status.setText('VHDL assistance unavailable — toggle to retry')
         self.page.lsp_status.setToolTip(message)
+        self.pending.clear()
+        self.unsent_edits.clear()
+        self.rebuild_problems()
 
     def sources(self):
         project = self.window.project
@@ -237,12 +248,19 @@ class EditorAssistance(QObject):
             return
         sources = self.sources()
         if not sources:
+            self.pending.clear()
+            self.unsent_edits.clear()
+            self.checked.clear()
+            self.rebuild_problems()
             return
         identity = (tuple((s['path'], s['library']) for s in sources), self.window.sidebar.standard.currentText())
         if self.identity != identity:
             self.server.stop()
             self.documents.clear()
             self.diagnostics.clear()
+            self.pending.clear()
+            self.unsent_edits.clear()
+            self.checked.clear()
             self.identity = identity
             files = []
             self.aliases.clear()
@@ -251,9 +269,11 @@ class EditorAssistance(QObject):
                 mirror = self.root / f'source_{index:04d}.vhd'
                 mirror.write_bytes(source['source'].encode('iso-8859-1', 'replace'))
                 self.aliases[original] = mirror.as_uri()
+                self.pending.add(original)
                 files.append({'file': str(mirror), 'library': source['library']})
             (self.root / 'hdl-prj.json').write_text(json.dumps({'options': {'ghdl_analysis': ['--std=' + STANDARDS[identity[1]]]}, 'files': files}))
             self.page.lsp_status.setText('Indexing project with GHDL…')
+            self.rebuild_problems()
             self.server.start(self.root)
             return
         if not self.server.running:
@@ -262,8 +282,10 @@ class EditorAssistance(QObject):
             uri, text = Path(source['path']).resolve().as_uri(), source['source']
             server_uri = self.aliases[uri]
             previous, version = self.documents.get(uri, (None, 0))
-            if text == previous:
+            if text == previous and uri not in self.unsent_edits:
                 continue
+            self.pending.add(uri)
+            self.unsent_edits.discard(uri)
             self.documents[uri] = (text, version + 1)
             if previous is None:
                 self.server.notify('textDocument/didOpen', {'textDocument': {'uri': server_uri, 'languageId': 'vhdl', 'version': 1, 'text': text}})
@@ -272,6 +294,7 @@ class EditorAssistance(QObject):
                 self.server.notify('textDocument/didChange', {'textDocument': {'uri': server_uri, 'version': version + 1},
                     'contentChanges': [{'range': {'start': {'line': 0, 'character': 0}, 'end': {'line': len(lines) - 1, 'character': len(lines[-1])}}, 'text': text}]})
         self.page.lsp_status.setText(f'GHDL · {len(sources)} sources · hover · F12 definition')
+        self.rebuild_problems()
 
     def uri_for(self, editor):
         index = self.page.editors.index(editor)
@@ -285,6 +308,14 @@ class EditorAssistance(QObject):
         if method != 'textDocument/publishDiagnostics':
             return
         uri = self.original_uri(params['uri'])
+        sent_text, version = self.documents.get(uri, (None, None))
+        if params.get('version') is not None and version is not None and params['version'] != version:
+            return
+        for editor in self.page.editors:
+            if self.uri_for(editor) == uri and sent_text is not None and editor.toPlainText() != sent_text:
+                return
+        self.pending.discard(uri)
+        self.checked.add(uri)
         self.diagnostics[uri] = params.get('diagnostics', [])
         for editor in self.page.editors:
             if self.uri_for(editor) == uri:
@@ -303,7 +334,9 @@ class EditorAssistance(QObject):
                 item = QListWidgetItem(f'{name}:{position["line"] + 1} — {severity}: {diagnostic["message"]}')
                 item.setData(Qt.ItemDataRole.UserRole, (uri, position))
                 self.page.problems.addItem(item)
-        self.page.problems.setVisible(self.page.problems.count() > 0)
+        self.page.assistance_panel.update_state(
+            enabled=self.page.assistance.isChecked(), available=not self.unavailable,
+            checking=bool(self.pending), checked=bool(self.checked))
 
     def open_problem(self, item):
         uri, position = item.data(Qt.ItemDataRole.UserRole)

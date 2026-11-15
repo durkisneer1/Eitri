@@ -94,6 +94,28 @@ class DesignFlow:
         window = self.window
         if not window.project or not window.editor or window.editor.isReadOnly():
             return
+        from eitri.backend.instance_insertion import instance_sites
+        source = window.editor.toPlainText()
+        sites = instance_sites(source)
+        if not sites:
+            QMessageBox.warning(window, 'Architecture needed',
+                'An instance connects components inside an architecture, after its begin. '
+                'Add a complete architecture with begin and end before inserting an instance. '
+                'Your source has not been changed.')
+            return
+        # Qt positions count UTF-16 code units, including two for emoji.
+        position = len(source.encode('utf-16-le')[:window.editor.textCursor().position() * 2].decode('utf-16-le'))
+        site = next((s for s in sites if s.start <= position < s.end), None)
+        if site is None:
+            if len(sites) == 1:
+                site = sites[0]
+            else:
+                destinations = [f'{s.entity} ({s.architecture})' for s in sites]
+                destination, accepted = QInputDialog.getItem(window, 'Choose destination architecture',
+                    'Insert into the concurrent section of', destinations, 0, False)
+                if not accepted:
+                    return
+                site = sites[destinations.index(destination)]
         window.refresh_project()
         choices = [u for u in window.project.entities if path is None or Path(u.path) == Path(path)]
         if not choices:
@@ -118,5 +140,22 @@ class DesignFlow:
             text += '\n        generic map (\n' + ',\n'.join(f'            {g.name} => {g.default}' for g in entity.generics) + '\n        )'
         if entity.ports:
             text += '\n        port map (\n' + ',\n'.join(f'            {p.name} => <{p.name}>' for p in entity.ports) + '\n        )'
-        window.editor.insertPlainText(text + ';\n')
-        window.statusBar().showMessage('Instance inserted. Replace each <...> placeholder with a signal.', 7000)
+        from PySide6.QtGui import QTextCursor
+        cursor = window.editor.textCursor()
+        cursor.setPosition(len(source[:site.offset].encode('utf-16-le')) // 2)
+        cursor.beginEditBlock()
+        cursor.insertText(text + ';\n\n')
+        cursor.endEditBlock()
+        # Reveal the generated block and select its first connection to fill in.
+        placeholder = text.find('<', text.find('port map')) if entity.ports else -1
+        if placeholder >= 0:
+            start = len(source[:site.offset].encode('utf-16-le')) // 2
+            cursor.setPosition(start + len(text[:placeholder].encode('utf-16-le')) // 2)
+            cursor.setPosition(start + len(text[:text.index('>', placeholder) + 1].encode('utf-16-le')) // 2,
+                               QTextCursor.MoveMode.KeepAnchor)
+        window.editor.setTextCursor(cursor)
+        window.editor.ensureCursorVisible()
+        window.editor.setFocus()
+        window.statusBar().showMessage(
+            f'Instance inserted in {site.entity} ({site.architecture}), before the architecture end. '
+            'Replace each <...> with a signal or port; instances belong outside processes.', 12000)

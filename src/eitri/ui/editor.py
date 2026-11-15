@@ -21,6 +21,7 @@ class LineNumbers(QWidget):
 
 
 class CodeEditor(QPlainTextEdit):
+    source_changed = Signal()
     hover_requested = Signal(object, object)
     definition_requested = Signal()
 
@@ -41,6 +42,16 @@ class CodeEditor(QPlainTextEdit):
         self.cursorPositionChanged.connect(self.highlight_line)
         self.update_gutter_width()
         self.highlight_line()
+        self._source_text = self.toPlainText()
+        self.textChanged.connect(self.check_source_change)
+
+    def check_source_change(self):
+        # Qt also emits textChanged for formatting (including rehighlighting).
+        # Builds and diagnostics must only react to changes in the VHDL source.
+        text = self.toPlainText()
+        if text != self._source_text:
+            self._source_text = text
+            self.source_changed.emit()
 
     def gutter_width(self):
         return 24 + self.fontMetrics().horizontalAdvance('9') * len(str(max(1, self.blockCount())))
@@ -118,15 +129,100 @@ class CodeEditor(QPlainTextEdit):
         menu.exec(event.globalPos())
         menu.deleteLater()
 
+    TAB_WIDTH = 4
+
+    def indent_lines(self, unindent=False):
+        """Indent whole selected lines as one edit, preserving selection direction."""
+        if self.isReadOnly():
+            return
+        cursor = self.textCursor()
+        selected = cursor.hasSelection()
+        backwards = cursor.position() < cursor.anchor()
+        start = QTextCursor(self.document())
+        start.setPosition(cursor.selectionStart())
+        start.setKeepPositionOnInsert(True)
+        end = QTextCursor(self.document())
+        end.setPosition(cursor.selectionEnd())
+        first = self.document().findBlock(cursor.selectionStart())
+        # A selection ending at the next line's start does not include that line.
+        last = self.document().findBlock(cursor.selectionEnd() - (1 if selected else 0))
+        edits = []
+        block = first
+        while block.isValid() and block.blockNumber() <= last.blockNumber():
+            remove = 0
+            if unindent:
+                columns = 0
+                for char in block.text():
+                    if char not in ' \t' or columns >= self.TAB_WIDTH:
+                        break
+                    columns += self.TAB_WIDTH - columns % self.TAB_WIDTH if char == '\t' else 1
+                    remove += 1
+            if remove or not unindent:
+                edits.append((block.position(), remove, '' if unindent else ' ' * self.TAB_WIDTH))
+            block = block.next()
+        if not edits:
+            return
+        edit = QTextCursor(self.document())
+        edit.beginEditBlock()
+        for position, remove, replacement in reversed(edits):
+            edit.setPosition(position)
+            edit.setPosition(position + remove, QTextCursor.MoveMode.KeepAnchor)
+            edit.insertText(replacement)
+        edit.endEditBlock()
+        if selected:
+            cursor.setPosition(end.position() if backwards else start.position())
+            cursor.setPosition(start.position() if backwards else end.position(), QTextCursor.MoveMode.KeepAnchor)
+        else:
+            cursor.setPosition(end.position())
+        self.setTextCursor(cursor)
+
+    def backspace_indent(self):
+        cursor = self.textCursor()
+        if cursor.hasSelection() or self.isReadOnly():
+            return False
+        # Work in Qt positions when slicing text containing non-BMP characters.
+        prefix = cursor.block().text().encode('utf-16-le')[:cursor.positionInBlock() * 2].decode('utf-16-le')
+        if not prefix or prefix.strip(' \t'):
+            return False
+        columns = len(prefix.expandtabs(self.TAB_WIDTH))
+        if columns % self.TAB_WIDTH:
+            return False
+        target, keep, width = columns - self.TAB_WIDTH, 0, 0
+        for char in prefix:
+            if width >= target:
+                break
+            width += self.TAB_WIDTH - width % self.TAB_WIDTH if char == '\t' else 1
+            keep += 1
+        cursor.beginEditBlock()
+        cursor.setPosition(cursor.block().position() + keep, QTextCursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        cursor.endEditBlock()
+        self.setTextCursor(cursor)
+        return True
+
     def keyPressEvent(self, event):
+        plain = not (event.modifiers() & (Qt.KeyboardModifier.ControlModifier |
+                    Qt.KeyboardModifier.AltModifier | Qt.KeyboardModifier.MetaModifier))
         if event.key() == Qt.Key.Key_F12:
             self.definition_requested.emit()
-        elif event.key() == Qt.Key.Key_Tab and not self.textCursor().hasSelection():
-            self.insertPlainText('    ')
+        elif self.isReadOnly():
+            super().keyPressEvent(event)
+        elif plain and (event.key() == Qt.Key.Key_Backtab or
+                        (event.key() == Qt.Key.Key_Tab and event.modifiers() & Qt.KeyboardModifier.ShiftModifier)):
+            self.indent_lines(unindent=True)
+        elif plain and event.key() == Qt.Key.Key_Tab:
+            if self.textCursor().hasSelection():
+                self.indent_lines()
+            else:
+                cursor = self.textCursor()
+                prefix = cursor.block().text().encode('utf-16-le')[:cursor.positionInBlock() * 2].decode('utf-16-le')
+                self.insertPlainText(' ' * (self.TAB_WIDTH - len(prefix.expandtabs(self.TAB_WIDTH)) % self.TAB_WIDTH))
+        elif plain and event.key() == Qt.Key.Key_Backspace and self.backspace_indent():
+            pass
         elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and not self.textCursor().hasSelection():
             cursor = self.textCursor()
-            prefix = cursor.block().text()[:cursor.positionInBlock()]
-            indent = re.match(r'\s*', prefix).group()
+            prefix = cursor.block().text().encode('utf-16-le')[:cursor.positionInBlock() * 2].decode('utf-16-le')
+            indent = re.match(r'[ \t]*', prefix).group()
             cursor.beginEditBlock()
             cursor.insertText('\n' + indent)
             cursor.endEditBlock()

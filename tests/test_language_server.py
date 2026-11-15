@@ -75,6 +75,8 @@ def test_live_diagnostics_edits_hover_definition_and_restart(workspace, tmp_path
             lambda value, key=kind: results.update({key: value}))
     wait(app, lambda: len(results) == 2)
     assert not e.diagnostics
+    wait(app, lambda: w.code_page.assistance_panel.empty_title.text() == 'No diagnostics')
+    assert not w.assistance.pending
     assert results['hover']['contents']
     assert results['definition'][0]['range']['start']['line'] == 2
     w.assistance.show_definition(results['definition'][0])
@@ -108,3 +110,5 @@ def test_lsp_loads_component_sources(workspace, tmp_path):
     wait(app, lambda: bool(done))
     assert not w.editor.diagnostics
     assert child.as_uri() in w.assistance.documents
+    wait(app, lambda: not w.assistance.pending)
+    assert w.code_page.assistance_panel.empty_title.text() == 'No diagnostics'

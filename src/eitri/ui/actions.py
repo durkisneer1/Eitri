@@ -24,6 +24,7 @@ def install_actions(window):
         (run_menu, 'Generate selected circuit', QKeySequence('F6'), lambda: window.tools.start('circuit')),
         (run_menu, 'Run all tests', QKeySequence('Shift+F5'), window.tools.run_all),
         (run_menu, 'Stop all runs', QKeySequence('Shift+Escape'), window.tools.stop_all),
+        (view_menu, 'Show / hide assistance panel', QKeySequence('Ctrl+J'), lambda: window.code_page.show_problems.toggle()),
         (view_menu, 'Component hierarchy', QKeySequence('F7'), lambda: window.switch_mode(3)),
     ):
         action = QAction(title, window)

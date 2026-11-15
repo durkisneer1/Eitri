@@ -1,6 +1,6 @@
 """One visible editor; document buffers retain their cursor and undo history."""
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QCheckBox, QListWidget, QHBoxLayout, QLineEdit, QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLineEdit, QTabWidget, QVBoxLayout, QWidget
 from .widgets import button, label
 
 
@@ -10,7 +10,7 @@ class CodePage(QWidget):
     insert_instance_requested = Signal()
     editor_added = Signal(object)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, settings=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -19,7 +19,9 @@ class CodePage(QWidget):
         self.document_name = label('Open a folder to begin')
         self.document_name.setWordWrap(True)
         title.addWidget(self.document_name, 1)
-        title.addWidget(button('Insert instance…', self.insert_instance_requested.emit))
+        insert_instance = button('Insert instance…', self.insert_instance_requested.emit)
+        insert_instance.setToolTip('Connect a project component in the architecture’s concurrent section. Placement is automatic; fill in the port connections.')
+        title.addWidget(insert_instance)
         self.create_testbench = button('Create testbench…', self.create_testbench_requested.emit)
         title.addWidget(self.create_testbench)
         layout.addLayout(title)
@@ -46,11 +48,11 @@ class CodePage(QWidget):
         self.code_tabs = QTabWidget()
         self.code_tabs.tabBar().hide()
         self.editors = []
-        layout.addWidget(self.code_tabs, 1)
-        self.problems = QListWidget()
-        self.problems.setMaximumHeight(140)
-        self.problems.hide()
-        layout.addWidget(self.problems)
+        from .assistance_panel import AssistancePanel, AssistanceSplit
+        self.assistance_panel = AssistancePanel()
+        self.problems = self.assistance_panel.problems
+        self.editor_split = AssistanceSplit(self.code_tabs, self.assistance_panel, settings, self)
+        layout.addWidget(self.editor_split, 1)
         footer = QHBoxLayout()
         self.assistance = QCheckBox('VHDL assistance')
         self.assistance.setChecked(True)
@@ -58,6 +60,13 @@ class CodePage(QWidget):
         self.lsp_status.setWordWrap(True)
         footer.addWidget(self.assistance)
         footer.addWidget(self.lsp_status, 1)
+        self.show_problems = button('Problems', lambda: None)
+        self.show_problems.setCheckable(True)
+        self.show_problems.setChecked(not self.assistance_panel.isHidden())
+        self.show_problems.setToolTip('Show or hide the assistance panel')
+        self.show_problems.toggled.connect(self.editor_split.set_panel_visible)
+        self.editor_split.panel_visibility_changed.connect(self.show_problems.setChecked)
+        footer.addWidget(self.show_problems)
         layout.addLayout(footer)
 
     @property

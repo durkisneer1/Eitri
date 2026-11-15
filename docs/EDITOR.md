@@ -7,6 +7,12 @@ uses Qt's folder picker instead of the native Finder panel. The left panel
 scrolls when the window is too short to fit the explorer and target settings.
 Try [the learning CPU](../examples/learning_cpu/README.md) for a complete example.
 
+From a terminal, `eitri .` opens the current directory, and
+`eitri "/path/to/project folder"` opens that project. Relative paths and `~` are
+supported. Plain `eitri` opens a blank workspace. Invalid paths are reported in
+the terminal before launching a window. All forms return control to the terminal;
+add `--foreground` to keep the app attached while debugging.
+
 ## Files and editing
 
 The left explorer lists VHDL files recursively. Select a file to display it in
@@ -30,8 +36,13 @@ an existing file without confirmation.
 
 **New design** creates an entity/architecture skeleton. **Insert instance**
 reads a project entity and inserts a direct instantiation with a unique label,
-generic defaults and named port-map placeholders. Replace `<...>` with actual
-connections before compiling. **Create testbench** generates the interface,
+generic defaults and named port-map placeholders. It places the instance before
+the destination architecture's closing `end`, outside processes and declarations,
+and selects the first connection placeholder. The cursor chooses an architecture
+when inside one; otherwise a file with multiple architectures offers a destination
+picker. A complete architecture is required. Selected source text is preserved,
+and one Undo removes the insertion. Replace `<...>` with actual connections
+before compiling. **Create testbench** generates the interface,
 signals and an empty stimulus process; its destination is selectable. Package
 context clauses and custom port types are retained. Initial values are supplied
 for STD_LOGIC inputs; custom types may need manual initialization. Clocks,
@@ -48,13 +59,28 @@ Hover shows declaration information; F12 or **Go to definition** opens the
 source. Project files remain editable; external standard-library files open
 read-only. Switching documents does not discard any edits.
 
+The assistance panel reserves its own space, even when there are no diagnostics,
+so clearing errors does not shift the code. Drag its divider to resize it. The
+top-right docking control moves it between the bottom and right of the editor;
+each position remembers its size. Use the close control, the **Problems** button,
+or Command/Ctrl+J to hide/show the panel without disabling assistance. Docking,
+visibility and sizes are remembered across launches. Theme changes preserve
+diagnostics and panel layout. After reported problems clear, a short forge-themed
+message appears; edits awaiting validation show **Checking your changes…**.
+
 Turn **VHDL assistance** off to stop the server. If it fails, the status tooltip
 shows the error; toggle off/on to retry. The bundled server does not support
 completion or rename. GHDL LS uses Latin-1 source columns; unsupported Unicode
 characters are replaced only in its analysis copy, never in the saved UTF-8 file.
 
-Lexical highlighting, four-space Tab insertion, carried indentation, line
-numbers, Undo/Redo and Find work independently of the server.
+Lexical highlighting, indentation, line numbers, Undo/Redo and Find work
+independently of the server. Tab advances to the next four-column stop; with a
+selection it indents all selected lines. Shift+Tab removes one indentation level
+from the current or selected lines. A selection ending at the next line's start
+does not indent that line. Each block indentation is one undoable edit.
+Backspace in leading whitespace at a four-column stop removes one indentation
+level; between stops or after code it deletes a single character. Enter carries
+the current indentation forward.
 
 ## Component hierarchy
 

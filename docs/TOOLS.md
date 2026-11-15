@@ -86,7 +86,7 @@ without synthesis, then compare that structure with the circuit implementation.
 
 ## Appearance
 
-Use **Light mode / Dark mode** at the bottom left to switch appearance. The
+Use the **sun / moon** control at the bottom left to switch appearance. The
 choice is saved across launches and applies to the editor, diagnostics, timing
 diagram, circuit preview and component hierarchy. Switching does not rebuild
 circuits or change source files. Individual SVG exports use the current theme;

@@ -18,12 +18,21 @@ def log_path():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Open the Eitri VHDL workspace.')
+    parser.add_argument('folder', nargs='?', help='project folder to open (use . for the current directory)')
     parser.add_argument('--foreground', action='store_true',
                         help='keep the app attached to this terminal for debugging')
     args = parser.parse_args(argv)
+    folder = None
+    if args.folder is not None:
+        try:
+            folder = Path(args.folder).expanduser().resolve()
+            if not folder.is_dir():
+                parser.error(f'Not a directory: {args.folder}')
+        except (OSError, RuntimeError) as error:
+            parser.error(f'Cannot open folder: {error}')
     if args.foreground:
         from .ui.window import main as run_workspace
-        run_workspace()
+        run_workspace(folder=folder)
         return
 
     path = log_path()
@@ -34,7 +43,7 @@ def main(argv=None):
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open('ab') as log:
             subprocess.Popen(
-                [sys.executable, '-m', 'eitri', '--foreground'],
+                [sys.executable, '-m', 'eitri', '--foreground', *([str(folder)] if folder else [])],
                 stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                 close_fds=True, **options,
             )

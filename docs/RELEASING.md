@@ -68,12 +68,14 @@ No API tokens or GitHub secrets are required. See the official
 
 ## Automated release
 
-Commit and push the workflow changes before tagging. Set the desired version
-in `pyproject.toml`, commit it, and push a matching tag, for example:
+Set the desired version in `pyproject.toml` and write a user-facing changelog in
+`docs/releases/VERSION.md`. Review the notes, README, and screenshots before
+tagging: pushing a `v*` tag starts publication, not just a preview build.
+Commit and push the reviewed changes, then push a matching tag, for example:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 The tag must match the project version exactly. This triggers native builds and
@@ -81,6 +83,13 @@ all twelve clean-install jobs, validates the three final Eitri wheels, uploads
 them to TestPyPI, and then uploads the identical artifacts to PyPI. If a required
 reviewer is configured for `pypi`, test the TestPyPI release before approving
 the production job. No local wheel downloads or Twine uploads are needed.
+
+After PyPI publication succeeds, the workflow creates a GitHub release using
+the exact contents of `docs/releases/VERSION.md`. Missing or empty notes fail
+release validation before either index receives an upload. The release step
+uses `gh release create --verify-tag`, so it cannot create an accidental tag.
+If only the GitHub release step fails, rerun that failed job after fixing the
+cause; do not rerun successful package uploads.
 
 For a TestPyPI-only rehearsal, use Actions → GHDL native wheels → Run workflow
 and enable `publish_testpypi`. Manual runs never upload to production. Use a
